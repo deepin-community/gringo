@@ -1,0 +1,18 @@
+#!/bin/bash
+# gringo: ground and exit in 0
+# Author: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+# Date: 2018-02-04
+
+set -o pipefail
+
+diff -y <(gringo <<<'a :- not b. b :- not a.') - <<EOF
+asp 1 0 0
+1 0 1 1 0 1 -2
+1 0 1 2 0 1 -1
+4 1 b 1 1
+4 1 a 1 2
+0
+EOF
+
+result=$?
+test $result -eq 0

@@ -1,0 +1,29 @@
+#!/bin/bash
+# gringo+reify: ground and exit in 0
+# Author: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+# Date: 2018-02-04
+
+set -o pipefail
+
+diff -y <(gringo <<<'a|b. a :- b. b :- a.' | reify | sort) - <<EOF
+atom_tuple(0).
+atom_tuple(0,1).
+atom_tuple(0,2).
+atom_tuple(1).
+atom_tuple(1,2).
+atom_tuple(2).
+atom_tuple(2,1).
+literal_tuple(0).
+literal_tuple(1).
+literal_tuple(1,1).
+literal_tuple(2).
+literal_tuple(2,2).
+output(a,2).
+output(b,1).
+rule(disjunction(0),normal(0)).
+rule(disjunction(1),normal(1)).
+rule(disjunction(2),normal(2)).
+EOF
+
+result=$?
+test $result -eq 0

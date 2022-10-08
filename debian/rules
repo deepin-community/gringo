@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# use custom hardening config flags for compiling clasp
+CONFIG=hardening
+CONFIGPARMS = -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -LAH -DCMAKE_SKIP_RPATH=YES -DCLINGO_MANAGE_RPATH=OFF -DLIB_POTASSCO_BUILD_APP=ON -DLIB_POTASSCO_BUILD_TESTS=ON -DCLASP_BUILD_APP=OFF -DCLASP_BUILD_TESTS=OFF -DCLASP_BUILD_EXAMPLES=OFF -DCLINGO_BUILD_EXAMPLES=ON -DCLINGO_BUILD_TESTS=ON -DPYTHON_EXECUTABLE:FILEPATH=/usr/bin/python3
+TOPBUILDDIR = build.dir/$(CONFIG)_mt
+ROOTDIR = $(shell pwd)
+
+#
+# export CXXFLAGS and LDFLAGS for cmake
+#
+# default to -O3 -Wall -DNDEBUG and enable all hardening flags
+#
+DEB_CXXFLAGS_MAINT_APPEND = -O3 -Wall
+DEB_CPPFLAGS_MAINT_APPEND = -DNDEBUG
+DEB_LDFLAGS_MAINT_APPEND =
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# force g++-10
+export CXX = g++-10
+export CC = gcc-10
+# inject CPPFLAGS to CXXFLAGS
+CXXFLAGS += $(CPPFLAGS)
+
+%:
+	dh $@ --with pkgkde_symbolshelper
+
+# configure with cmake
+override_dh_auto_configure:
+	dh_auto_configure --builddirectory=$(TOPBUILDDIR) -- $(CONFIGPARMS)
+
+# build binaries in $(TOPBUILDDIR)
+override_dh_auto_build:
+	dh_auto_build --builddirectory=$(TOPBUILDDIR)
+
+override_dh_auto_clean:
+	dh_auto_clean --builddirectory=$(TOPBUILDDIR)
+
+# run and output test results
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	dh_auto_test --builddirectory=$(TOPBUILDDIR) -- -e LD_LIBRARY_PATH="$(ROOTDIR)/$(TOPBUILDDIR)/bin:$(LD_LIBRARY_PATH)" &&\
+		{ EXIT_CODE=$$? ; echo "Exit $$EXIT_CODE" ; test -d $(TOPBUILDDIR)/Testing/Temporary && tail -n +1 -v -- $(TOPBUILDDIR)/Testing/Temporary/* ; exit $$EXIT_CODE ; } ||\
+		{ EXIT_CODE=$$? ; echo "Exit $$EXIT_CODE" ; test -d $(TOPBUILDDIR)/Testing/Temporary && tail -n +1 -v -- $(TOPBUILDDIR)/Testing/Temporary/* ; exit $$EXIT_CODE ; }
+endif
+
+# install CHANGES.md as changelog
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGES.md
+
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(shell pwd)/$(TOPBUILDDIR)/bin

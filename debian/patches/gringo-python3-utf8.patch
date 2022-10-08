@@ -1,0 +1,28 @@
+From: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+Date: Mon, 5 Feb 2018 06:31:16 +0000
+Subject: Fix testsuite for python3 when reading utf-8 scripts
+
+===================================================================
+---
+ app/clingo/tests/run.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/app/clingo/tests/run.py b/app/clingo/tests/run.py
+index 640ae0f..687089d 100755
+--- a/app/clingo/tests/run.py
++++ b/app/clingo/tests/run.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ 
+ import re
+ import os
+@@ -134,7 +134,7 @@ if parse_ret.action == "run":
+         for f in sorted(files):
+             if f.endswith(".lp"):
+                 b = os.path.join(root, f[:-3])
+-                with open(b + ".lp", 'rU') as inst_file:
++                with open(b + ".lp", 'rU', encoding='utf-8') as inst_file:
+                     inst = inst_file.read()
+                     if (not with_python and re.search(r"#script[ ]*\(python\)", inst)) or \
+                        (not with_lua and re.search(r"#script[ ]*\(lua\)", inst)) or \

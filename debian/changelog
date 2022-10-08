@@ -1,0 +1,685 @@
+gringo (5.4.1-3) unstable; urgency=medium
+
+  * debian/symbols: fix symbols for g++-10 >= 10.2.1
+  * Bug fix: "non-standard gcc/g++ used for build (gcc-9)", thanks to
+    Matthias Klose (Closes: #978514).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 28 Dec 2020 12:50:01 +0000
+
+gringo (5.4.1-2) unstable; urgency=medium
+
+  * Upload to unstable
+  * debian/symbols: fix symbols for g++-10 >= 10.2.1
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 27 Dec 2020 17:29:03 +0000
+
+gringo (5.4.1-1) experimental; urgency=medium
+
+  * New upstream version 5.4.1
+  * debian/patch: add bump-version-5.4.1.patch
+  * drop python3.8-compat.patch, already applied upstream
+  * compile with g++-10
+  * debian/symbols: fix symbols for g++-10 >= 10.2.1
+  * debian/control: set debhelper-compat version to 13
+  * debian/control: bump Standards-Version to 4.5.1
+  * debian/control: build with system-wide liblua5.4-dev
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 27 Dec 2020 14:55:45 +0000
+
+gringo (5.4.0-2) unstable; urgency=medium
+
+  * Upload to unstable
+  * debian/symbols: fix symbols for missing architectures
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 03 Apr 2020 06:56:49 -0400
+
+gringo (5.4.0-1) experimental; urgency=medium
+
+  * New upstream version 5.4.0
+  * install libclingo.so.3.0 instead of libclingo.so.2.0
+  * generate symbols for libclingo.so.3
+  * refresh gringo-python3-utf8.patch, python3.8-compat.patch, and
+    link-libatomic-check.patch
+  * drop gringo-python37-async.patch, already applied upstream
+  * add highlight.js 9.12.0 to missing-sources
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 30 Mar 2020 06:25:20 -0400
+
+gringo (5.3.0-13) unstable; urgency=medium
+
+  * Upload to unstable
+  * debian/symbols: fix symbols for g++-9 >= 9.2.0 on armel and powerpc
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 11 Mar 2020 20:57:01 -0400
+
+gringo (5.3.0-12) experimental; urgency=medium
+
+  * debian/symbols: fix symbols for g++-9 >= 9.2.0
+  * debian/{rules,install}: drop libatomic hacks, stop confusing build
+    target with build directory
+  * debian/patches: refresh python3.8-compat and gringo-python37-async
+  * link-libatomic-check.patch: add libatomic checks to CMakeLists.txt
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 11 Mar 2020 07:31:40 -0400
+
+gringo (5.3.0-11) experimental; urgency=medium
+
+  * add support for python3.8, thanks to Steve Langasek
+  * compile with gcc-9 and g++-9
+  * debian/control: bump Standards-Version to 4.5.0 (no changes required)
+  * renamed debian/{NEWS,TODO}.Debian to debian/{NEWS,TODO}
+    Lintian tag incorrect-packaging-filename
+  * setup debhelper-compat 12.
+    Lintian tag package-uses-old-debhelper-compat-version
+  * debian/control: set Rules-Requires-Root to no
+  * debian/symbols: fix symbols for g++-9 >= 9.2.0
+  * Bug fix: "gringo needs a new upstream, and fixes for python3.8",
+    thanks to Matthias Klose (Closes: #951842).
+  * Bug fix: "gringo ftbfs with Python 3.8", thanks to Matthias Klose
+    (Closes: #951707).
+  * Bug fix: "non-standard gcc/g++ used for build (gcc-8)", thanks to
+    Matthias Klose (Closes: #944178).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 09 Mar 2020 13:31:25 +0100
+
+gringo (5.3.0-10) unstable; urgency=medium
+
+  * Fix FTBFS on buster.
+  * debian/control: add Build-Depends on g++-8 >= 8.2.0-21
+  * debian/symbols: add alpha and x32 symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 02 Mar 2019 08:49:10 +0100
+
+gringo (5.3.0-9) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 01 Mar 2019 06:27:37 +0100
+
+gringo (5.3.0-8) experimental; urgency=medium
+
+  * debian/symbols: fix symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 28 Feb 2019 05:25:47 +0100
+
+gringo (5.3.0-7) experimental; urgency=medium
+
+  * Bug fix: "new symbols", thanks to Sjoerd Simons (Closes: #923228).
+  * debian/control: bump Standards-Version to 4.3.0
+  * debian/symbols: fix FTBFS on powerpcspe
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 27 Feb 2019 05:24:41 +0100
+
+gringo (5.3.0-6) unstable; urgency=medium
+
+  * debian/symbols: fix symbols for g++-8 >= 8.2.0-10
+  * Upload to unstable.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 14 Dec 2018 08:09:08 +0100
+
+gringo (5.3.0-5) experimental; urgency=medium
+
+  * Bug fix: "gringo FTBFS: symbol differences", thanks to Adrian Bunk
+    (Closes: #916266).
+  * debian/symbols: fix FTBFS for g++-8 >= 8.2.0-10
+  * debian/control: Build-Depends on g++-8 >= 8.2.0-10
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 13 Dec 2018 08:22:24 +0100
+
+gringo (5.3.0-4) unstable; urgency=medium
+
+  * debian/tests/gringo{0,1,3,4}: fix integer atom mappings
+  * NEWS.Debian: fix link to aspif description
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 22 Nov 2018 07:26:25 +0100
+
+gringo (5.3.0-3) unstable; urgency=medium
+
+  * debian/upstream/metadata: add DEP-12 upstream metadata
+  * debian/symbols: fix symbols for version 5.3.0 of libclingo.so.2
+  * Upload to unstable.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 21 Nov 2018 04:54:38 +0100
+
+gringo (5.3.0-2) experimental; urgency=medium
+
+  * debian/symbols: fix symbols for version 5.3.0 of libclingo.so.2
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 15 Nov 2018 07:30:26 +0100
+
+gringo (5.3.0-1) experimental; urgency=medium
+
+  * New upstream version 5.3.0
+  * drop upstream applied gringo-makefile.patch
+  * refresh gringo-python37-async.patch with fcef335 from upstream
+  * install libclingo.so.2.0
+  * debian/symbols: update to libclingo.so.2.0
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 11 Nov 2018 08:56:35 +0100
+
+gringo (5.2.3-5) unstable; urgency=medium
+
+  * debian/symbols: batchpatch alpha, mips, mips64el symbols for g++-8
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 08 Nov 2018 04:35:55 +0100
+
+gringo (5.2.3-4) unstable; urgency=medium
+
+  * Bug fix: "Please update symbols for riscv64", thanks to Manuel
+    A. Fernandez Montecelo (Closes: #912269).
+  * debian/symbols: batchpatch symbols for g++-8
+  * Upload to unstable.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 07 Nov 2018 04:07:00 +0100
+
+gringo (5.2.3-3) experimental; urgency=medium
+
+  * debian/control: bump Standards-Version to 4.2.1
+  * Bug fix: "gringo build-depends on legacy compiler g++-7", thanks to
+    Matthias Klose (Closes: #912582).
+    - debian/control: Build-Depends on g++-8
+  * debian/symbols: update amd64 symbols for g++-8
+  * Bug fix: "gringo ftbfs with Python 3.7", thanks to Matthias Klose
+    (Closes: #912552).
+    - debian/control: Build-Depends on python3.7
+    - gringo-python37-async.patch: rename async keyword to async_
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 04 Nov 2018 08:34:30 +0100
+
+gringo (5.2.3-2) unstable; urgency=medium
+
+  * debian/symbols: batchpatch symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 03 Jul 2018 06:23:44 +0200
+
+gringo (5.2.3-1) unstable; urgency=medium
+
+  * New upstream version 5.2.3
+  * debian/watch: force three-digit version
+  * debian/control: bump Standards-Version to 4.1.4
+  * debian/TODO.Debian: refresh TODO list
+  * gringo-makefile.patch: drop Makefile
+  * debian/symbols: update amd64 symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 30 Jun 2018 13:27:28 +0200
+
+gringo (5.2.2-6) unstable; urgency=medium
+
+  * Team upload
+  * Added build-dependency python3-distutils in order to fix FTBFS. Thanks
+    to Adrian Bunk for the patch (closes: #896791)
+  * Added debian/gbp.conf with pristine-tar=True
+
+ -- Ralf Treinen <treinen@debian.org>  Thu, 03 May 2018 08:30:23 +0200
+
+gringo (5.2.2-5) unstable; urgency=medium
+
+  * fix FTBFS with gringo-python3-utf8.patch
+  * debian/rules: report ctest logs in case of error
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 05 Feb 2018 07:39:21 +0100
+
+gringo (5.2.2-4) unstable; urgency=medium
+
+  * setup build environment for python3
+    + debian/control: setup Build-Depends for python3
+    + debian/rules: force PYTHON_EXECUTABLE to /usr/bin/python3
+  * FTBFS: dh_auto_test needs LD_LIBRARY_PATH for libclingo
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 04 Feb 2018 21:35:05 +0100
+
+gringo (5.2.2-3) unstable; urgency=medium
+
+  * add dep8 testsuite
+    + debian/rules: build, run, and output upstream tests
+    + debian/tests: add dep8 tests
+  * debian/symbols: add ia64, update templinst archs
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 04 Feb 2018 09:22:41 +0100
+
+gringo (5.2.2-2) unstable; urgency=medium
+
+  * update debian/control and debian/compat
+    + update Vcs-Git and Vcs-Browser for salsa
+    + bump Standards-Version to 4.1.3
+    + bump debhelper compatibility version to 11
+  * debian/symbols: update amd64 symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 03 Feb 2018 15:17:29 +0100
+
+gringo (5.2.2-1) unstable; urgency=medium
+
+  * New upstream version 5.2.2
+  * drop upstream applied gringo-remove-wrong-assertion.patch
+  * debian/symbols: add arm64 kfreebsd-amd64 kfreebsd-i386 symbols
+    pkgkde-symbolshelper batchpatch -v 1
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 10 Nov 2017 08:08:58 +0100
+
+gringo (5.2.1-4) unstable; urgency=medium
+
+  * debian/symbols: fix FTBFS on armel
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 04 Nov 2017 14:55:24 +0100
+
+gringo (5.2.1-3) unstable; urgency=medium
+
+  * add patch from upstream commit 02c6d85 to fix wrong assertion
+  * debian/control: Build-Depends to cmake >= 3.1.0
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 04 Nov 2017 11:14:23 +0100
+
+gringo (5.2.1-2) unstable; urgency=medium
+
+  * Use pkgkde-symbolshelper to manage C++ symbols
+  * debian/rules: use pkgkde_symbolshelper dh addon
+  * debian/control: Build-Depends on pkg-kde-tools
+  * debian/symbols: use pkgkde-symbolshelper to create C++ symbols
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 03 Nov 2017 06:42:20 +0100
+
+gringo (5.2.1-1) unstable; urgency=medium
+
+  * New upstream version 5.2.1
+  * debian/TODO.Debian: list todo items
+  * debian/copyright: gringo switched to MIT, and so does the packaging
+  * debian/compat: bump debhelper compat level to 10
+  * debian/control: use cmake instead of scons
+    - force g++-7
+    - bump Standards-Version to 4.1.1
+    - fix Homepage URI
+  * debian/patches: drop various upstream applied patches
+    - gringo-alpha-fpu-getcw.patch
+    - gringo-broken-std-exception_ptr.patch
+    - gringo-fix-body-literals-as-auxiliary.patch
+    - reproducible-build.patch
+  * debian/install: add libclingo library
+  * debian/gringo.links: add ldconfig symlinks for libclingo.so.1.0
+  * debian/symbols: add libclingo.so.1 symbols
+  * debian/rules: use cmake without rpath and force g++-7
+  * Bug fix: "FTBFS: cat: build/release.log: No such file or directory",
+    thanks to Lucas Nussbaum (Closes: #880287).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 01 Nov 2017 15:30:25 +0100
+
+gringo (5.1.0-5) unstable; urgency=medium
+
+  * Bug fix: "FTBFS: libgringo/src/python.cc:348:46: error:
+    &#39;*(Gringo::{anonymous}::Object (*)(Gringo::{anonymous}::Reference,
+    Gringo::{anonymous}::Reference))Gringo::{anonymous}::createId&#39; is
+    not a valid template argument for type
+    &#39;Gringo::{anonymous}::Object
+    (&amp;)(Gringo::{anonymous}::Reference,
+    Gringo::{anonymous}::Reference)&#39;", thanks to Lucas Nussbaum
+    (Closes: #871100).
+    - debian/control: Build-Depends on g++-6
+    - debian/rules: set CONFIGPARMS to CXX='g++-6'
+  * debian/copyright: use https instead of http
+  * debian/control: Bump Standards-Version to 4.0.1
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 17 Aug 2017 07:18:37 +0200
+
+gringo (5.1.0-4) unstable; urgency=medium
+
+  * fix FTBFS on alpha: do not define FPU_SWITCH_DOUBLE on alpha,
+    _FPU_GETCW and friends are undefined on this arch
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 20 Dec 2016 05:10:36 +0100
+
+gringo (5.1.0-3) unstable; urgency=medium
+
+  * debian/rules: fix FTBFS on architectures that require -latomic
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 16 Dec 2016 08:13:33 +0100
+
+gringo (5.1.0-2) unstable; urgency=medium
+
+  * debian/rules: fix C++11 threads
+    - link with libatomic on architectures that need it
+    - disable threads and define BROKEN_STD_EXCEPTION_PTR on armel
+  * gringo-broken-std-exception_ptr.patch: add support for armel
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 15 Dec 2016 06:49:16 +0100
+
+gringo (5.1.0-1) unstable; urgency=medium
+
+  * New upstream version 5.1.0
+  * debian/copyright: update copyright year and github source
+  * debian/control
+    - Build-Depends on g++ >= 4:6.1.1 replaces libtbb-dev
+    - point Homepage to https://www.potassco.org
+    - use https for Vcs-*
+    - add Breaks clasp (<< 3.2.1-1)
+  * debian/rules
+    - build lpconvert
+    - drop libtbb-dev and use c++11 multi-threading
+    - disable threads on powerpc,powerpcspe,m68k,mips,mipsel,sh4
+  * drop already applied upstream patches: gringo-include-math.patch,
+    gringo-solve-multi.patch, gringo-translate-minmax.patch
+  * gringo-fix-body-literals-as-auxiliary.patch: add upstream patch
+    cherry-picked from d6cfb89df6bbf138ca3e259d71ca7050b322b5d5
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 11 Dec 2016 13:12:35 +0100
+
+gringo (4.5.4-4) unstable; urgency=medium
+
+  * Bug fix: "please make the build reproducible", thanks to
+    Reiner Herrmann (Closes: #844096).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 07 Dec 2016 08:27:20 +0100
+
+gringo (4.5.4-3) unstable; urgency=medium
+
+  * Fix gringo-multi-solver.patch: this fixes an FTBFS on architectures
+    that have WITH_THREAD=0, i.e., all architectures except amd64 and
+    ppc64.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 02 May 2016 07:18:34 +0200
+
+gringo (4.5.4-2) unstable; urgency=medium
+
+  * Bug fix: "FTBFS: error: 'pow' is not a member of 'std'", thanks to
+    Martin Michlmayr (Closes: #822383).
+  * Add patch to fix random python multithreading segfaults (upstream bug 117)
+  * Add patch to fix #min/#max translation bug (upstream bug 119)
+  * Build with liblua5.3
+  * Bump Standards-Version to 3.9.8
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 01 May 2016 08:47:29 +0200
+
+gringo (4.5.4-1) unstable; urgency=medium
+
+  * Imported Upstream version 4.5.4
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 19 Dec 2015 14:07:05 +0100
+
+gringo (4.5.3-1) unstable; urgency=medium
+
+  * Imported Upstream version 4.5.3
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 26 Sep 2015 09:31:03 +0200
+
+gringo (4.5.1-1) unstable; urgency=medium
+
+  * Imported Upstream version 4.5.1
+  * Add reify.1 manpage
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 13 Jul 2015 09:01:56 +0200
+
+gringo (4.5.0-1) unstable; urgency=medium
+
+  * Bump Standards-Version to 3.9.6.
+  * Imported Upstream version 4.5.0
+  * debian/control: Add Breaks: aspcud (<= 1.9.0-2). Add reify description.
+  * debian/copyright: Update copyright information, remove outdated files.
+  * debian/docs: Remove NOTES.
+  * debian/install: Install reify.
+  * debian/rules: Build reify.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 11 Jul 2015 09:36:10 +0200
+
+gringo (4.4.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/control: Remove Suggests on potassco-guide.
+  * debian/control: Fix Vcs fields to use anonscm.debian.org.
+  * Setup git repository to use git-buildpackage.
+  * Import upstream sources with git-import-orig --pristine-tar.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 18 Aug 2014 17:10:34 +0200
+
+gringo (4.3.0-2) unstable; urgency=low
+
+  * Bug fix: "non-standard gcc/g++ used for build (gcc-4.8)", thanks to
+    Matthias Klose (Closes: #751317).
+  * Build with system-wide liblua5.2-dev.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 12 Jun 2014 09:16:31 +0200
+
+gringo (4.3.0-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 26 Feb 2014 13:06:29 +0100
+
+gringo (4.2.1-4) unstable; urgency=low
+
+  * Bug fix: "add ppc64el to architecture list for libtbb-dev to fix
+    FTBFS", thanks to Logan Rosen (Closes: #735005).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 12 Jan 2014 19:22:44 +0100
+
+gringo (4.2.1-3) unstable; urgency=low
+
+  * debian/control: Breaks aspcud <= 2012.10.24-6 after discussion with
+    upstream.
+    Remove spurious Build-Depends on libboost-filesystem-dev and
+    libboost-system-dev.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 18 Dec 2013 09:42:59 +0100
+
+gringo (4.2.1-2) unstable; urgency=low
+
+  * debian/control: FTBFS on ia64 sparc powerpc, Build-Depends is now
+    g++-4.8 >= 4.8.0.
+  * debian/rules: Set CXX to g++-4.8.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 17 Dec 2013 07:07:54 +0100
+
+gringo (4.2.1-1) unstable; urgency=low
+
+  gringo 4.2 adds support for {i,o,}clingo again.
+
+  * New upstream release.
+  * debian/watch: Back to watching all releases of gringo.
+  * debian/rules: Add scons, python, tbb, and hardening support.
+  * debian/install: Install gringo and clingo.
+  * debian/gringo.links: Symlink clingo binary and manpage to {i,o}clingo.
+  * debian/gringo.manpages: Remove iclingo manpage.
+  * debian/control: Build-Depends on bison, scons, g++ >= 4.8.0,
+    libpython2.7-dev, libtbb-dev.
+    Bump Standards-Version to 3.9.5.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 16 Dec 2013 16:28:42 +0100
+
+gringo (3.0.5-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/copyright: Update copyright years.
+  * debian/compat: Bump to version 9.
+  * debian/control:
+    - Remove DM-Upload-Allowed.
+    - Build-Depends on debhelper >= 9.
+  * debian/watch: Only watch upstream gringo >= 3.
+  * debian/patches/gringo-clang-gcc.patch debian/patches/gringo-cond.patch
+    debian/patches/gringo-domain-fwd-decl.patch
+    debian/patches/gringo-unpool-pred.patch debian/patches/series: Remove
+    already applied patches.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 21 May 2013 19:04:24 +0200
+
+gringo (3.0.4-4) unstable; urgency=low
+
+  * Apply upstream patches from subversion r6200 and r6237 for fixing
+    potassco bugs 75 and 76, resp.
+  * debian/patches/gringo-cond.patch: New file originally from
+    http://sourceforge.net/p/potassco/code/6291/tree/tags/gringo-3.0.4/patches/patch-cond.diff?format=raw.
+  * debian/patches/gringo-unpool-pred.patch: New file originally from
+    http://sourceforge.net/p/potassco/code/6291/tree/tags/gringo-3.0.4/patches/patch-unpool-pred.diff?format=raw.
+  * debian/control: Bump Standards-Version to 3.9.4.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 22 Nov 2012 10:40:56 +0100
+
+gringo (3.0.4-3) unstable; urgency=low
+
+  * Bug fix: "please build-depend on unversionend boost libraries", thanks
+    to Ralf Treinen (Closes: #672933).
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 23 May 2012 15:25:09 +0200
+
+gringo (3.0.4-2) unstable; urgency=low
+
+  * debian/patches/gringo-clang-gcc.patch: New file originally from
+    https://potassco.svn.sourceforge.net/svnroot/potassco/tags/gringo-3.0.4/patches/patch-clang.diff.
+  * Bug fix: "ftbfs with GCC-4.7", thanks to Matthias Klose (Closes:
+    #667193).
+  * debian/control: Bump Standards-Version to 3.9.3.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 10 Apr 2012 16:48:52 +0200
+
+gringo (3.0.4-1ubuntu1~oneiric1) oneiric; urgency=low
+
+  * Upload to ppa:~tkren/asp.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 27 Jan 2012 08:08:04 +0100
+
+gringo (3.0.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 26 Jan 2012 14:59:59 +0100
+
+gringo (3.0.3-7) unstable; urgency=low
+
+  * debian/copyright: Fix comma-separated-files-in-dep5-copyright,
+    obsolete-field-in-dep5-copyright and unversioned-copyright-format-uri
+    lintian warnings.
+  * Bug fix: "FTBFS: clone_allocator.hpp:34:27: error: invalid use of
+    incomplete type <struct Domain>", thanks to Lucas Nussbaum
+    (Closes: #652787).
+  * debian/patches/gringo-domain-fwd-decl.patch: New file.
+  * debian/control: Build-Depends on re2c to recreate parser.cpp from
+    parser.r2c, add boost version libboost-*N.MM-dev.
+  * debian/rules: Add override_dh_auto_configure and remove parser.cpp and
+    converter.cpp to force recreation of re2c lexer files.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 25 Dec 2011 18:44:20 +0100
+
+gringo (3.0.3-6) unstable; urgency=low
+
+  * debian/control: Setup as Debian Science project.
+    - Set Maintainer to Debian Science Maintainers and Uploaders to Thomas
+      Krennwallner.
+    - Set DM-Upload-Allowed to yes.
+    - Convert bzr repository to git and use Vcs-Git and Vcs-Browser
+      accordingly.
+    - Build-Depends on debhelper >= 8.0.0.
+  * debian/rules: Add override_dh_auto_build to get rid off
+    debian/patches/gringo-makefile.patch.
+  * debian/patches/gringo-makefile.patch debian/patches/series: Remove
+    debian/patches/gringo-makefile.patch.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 05 Sep 2011 13:21:51 +0200
+
+gringo (3.0.3-5~natty1) natty; urgency=low
+
+  * debian/watch: Fix lintian debian-watch-contains-dh_make-template.
+  * debian/control: Lower Priority to extra and bump Standards-Version to
+    3.9.2.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 29 Apr 2011 07:11:12 +0200
+
+gringo (3.0.3-4) unstable; urgency=low
+
+  * debian/control: Combine gringo, clingo, and iclingo binary packages
+    into gringo.
+   + Conflicts and Replaces clingo and iclingo.
+  * debian/copyright: Convert to DEP-5 format and add missing licenses.
+  * debian/rules: Add override_dh_installchangelogs for CHANGES file.
+  * debian/install: Install gringo, clingo and iclingo.
+  * Refresh debian/patches/gringo-makefile.patch; do not install anything
+    here.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 22 Feb 2011 09:38:26 +0100
+
+gringo (3.0.3-3) unstable; urgency=low
+
+  * Initial upload (Closes: #605879)
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 05 Dec 2010 18:01:28 +0100
+
+gringo (3.0.3-2) unstable; urgency=low
+
+  * Upload to mentors.debian.net.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sat, 20 Nov 2010 09:43:35 +0100
+
+gringo (3.0.3-1~maverick1) maverick; urgency=low
+
+  * New upstream release.
+
+  * Fix changelog entries.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 12 Nov 2010 05:53:36 +0100
+
+gringo (3.0.2-2~maverick1) maverick; urgency=low
+
+  * Tag distro-series.
+
+  * Fix Standards-Version and Priority.
+
+  * Suggest potassco-guide.
+
+  * Fix missing changelog.
+
+  * Add additional authors to copyright.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 10 Oct 2010 08:50:01 +0200
+
+gringo (3.0.2-1) lucid; urgency=low
+
+  * New upstream release.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Mon, 04 Oct 2010 22:03:12 +0200
+
+gringo (3.0.1-2) lucid; urgency=low
+
+  * Build with system-wide liblua5.1-dev.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 28 Jul 2010 06:15:10 +0200
+
+gringo (3.0.1-1) lucid; urgency=low
+
+  * New upstream release.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 27 Jul 2010 06:00:34 +0200
+
+gringo (2.0.5-6) lucid; urgency=low
+
+  * Switch to dpkg-source 3.0 (quilt) format.
+
+  * Fix lintian warning debhelper-but-no-misc-depends: add ${misc:Depends} to potassco-guide.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 06 Jun 2010 18:18:22 +0200
+
+gringo (2.0.5-5) lucid; urgency=low
+
+  * Added watch file.
+
+  * Added Vcs-Bzr to control.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Tue, 01 Jun 2010 14:47:13 +0200
+
+gringo (2.0.5-4) lucid; urgency=low
+
+  * Set Architecture of all binary packages to "any".
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 28 May 2010 09:21:58 +0200
+
+gringo (2.0.5-3) lucid; urgency=low
+
+  * Set Architecture of all binary packages to "all".
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Fri, 28 May 2010 07:04:46 +0200
+
+gringo (2.0.5-2) lucid; urgency=low
+
+  * Moved to Ubuntu PPA.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Wed, 26 May 2010 00:33:32 +0200
+
+gringo (2.0.5-1) unstable; urgency=low
+
+  * Initial release.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Thu, 04 Mar 2010 19:47:14 +0100

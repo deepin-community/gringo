@@ -1,0 +1,9 @@
+* gringo TODO list
+
+** upstream renamed gringo to clingo
+
+** add clingo C api header files and library archive
+
+** add pyclingo python module
+
+** add luaclingo lua module

@@ -1,0 +1,11 @@
+#!/bin/bash
+# clingo+py: solve-async example
+# Author: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+# Date: 2018-02-04
+
+set -o pipefail
+
+clingo /usr/share/doc/gringo/examples/clingo/solve-async/{solve-async-py,program}.lp
+
+result=$?
+test $result -eq 20

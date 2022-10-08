@@ -1,0 +1,11 @@
+#!/bin/bash
+# clingo+py: cannot example
+# Author: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+# Date: 2018-02-04
+
+set -o pipefail
+
+clingo /usr/share/doc/gringo/examples/clingo/cannot/{cannot-py,example}.lp
+
+result=$?
+test $result -eq 30

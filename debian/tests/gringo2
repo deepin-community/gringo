@@ -1,0 +1,11 @@
+#!/bin/bash
+# clingo: gbie1.lp unsat_01.lp is unsatisfiable
+# Author: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+# Date: 2018-02-04
+
+set -o pipefail
+
+clingo /usr/share/doc/gringo/examples/gringo/gbie/{gbie1.lp,instances/unsat_01.lp}
+
+result=$?
+test $result -eq 20

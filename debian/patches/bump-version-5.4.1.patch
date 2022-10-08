@@ -1,0 +1,28 @@
+From: Thomas Krennwallner <tkren@kr.tuwien.ac.at>
+Date: Sun, 27 Dec 2020 14:52:06 +0000
+Subject: bump CLINGO_VERSION to 5.4.1
+
+Last-Update: 2020-12-27
+Forwarded: no
+
+upstream forgot to bump revision+1
+---
+ libclingo/clingo.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/libclingo/clingo.h b/libclingo/clingo.h
+index 51fa165..3d83976 100644
+--- a/libclingo/clingo.h
++++ b/libclingo/clingo.h
+@@ -113,9 +113,9 @@ extern "C" {
+ //! Minor version number.
+ #define CLINGO_VERSION_MINOR 4
+ //! Revision number.
+-#define CLINGO_VERSION_REVISION 0
++#define CLINGO_VERSION_REVISION 1
+ //! String representation of version.
+-#define CLINGO_VERSION "5.4.0"
++#define CLINGO_VERSION "5.4.1"
+ 
+ //! Signed integer type used for aspif and solver literals.
+ typedef int32_t clingo_literal_t;

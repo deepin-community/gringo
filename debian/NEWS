@@ -1,0 +1,12 @@
+gringo (5.1.0-1) unstable; urgency=medium
+
+    The gringo and reify programs drop direct support for smodels output
+    format and use the new asp intermediate format (aspif) instead.  The
+    clasp solver automatically supports aspif starting with version 3.2.0
+    and later.  If you need to ground a logic program to smodels format,
+    you can translate aspif to smodels format with the lpconvert tool,
+    which is part of this package.  See also
+    <https://www.cs.uni-potsdam.de/wv/publications/DBLP_conf/iclp/GebserKKOSW16x.pdf>
+    for a detailed description of the asp intermediate format.
+
+ -- Thomas Krennwallner <tkren@kr.tuwien.ac.at>  Sun, 11 Dec 2016 09:51:56 +0100

@@ -1,0 +1,5 @@
+build.dir/hardening_mt/bin/gringo usr/bin/
+build.dir/hardening_mt/bin/clingo usr/bin/
+build.dir/hardening_mt/bin/reify usr/bin/
+build.dir/hardening_mt/bin/lpconvert usr/bin/
+build.dir/hardening_mt/bin/libclingo.so.3.0 usr/lib/

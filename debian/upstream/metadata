@@ -1,0 +1,33 @@
+Bug-Database: https://github.com/potassco/clingo/issues
+Bug-Submit: https://github.com/potassco/clingo/issues/new
+Changelog: https://github.com/potassco/clingo/blob/master/CHANGES.md
+Contact: https://sourceforge.net/p/potassco/mailman/potassco-users/
+FAQ: https://potassco.org/doc/faq/
+Name: clingo
+Other-References: https://potassco.org/doc/
+Reference:
+  - Author: Martin Gebser and Roland Kaminski and Benjamin Kaufmann and Torsten Schaub
+    Title: Multi-shot ASP solving with clingo
+    Journal: Theory and Practice of Logic Programming
+    Year: 2018
+    Pages: 1–56
+    DOI: 10.1017/S1471068418000054
+    URL: https://arxiv.org/abs/1705.09811
+  - Author: Martin Gebser and Roland Kaminski and Benjamin Kaufmann and Torsten Schaub
+    Title: 'Clingo = ASP + Control: Preliminary Report'
+    Journal: CoRR
+    Year: 2014
+    Number: abs/1405.3694
+    Pages: 9
+    URL: https://arxiv.org/abs/1405.3694
+  - Author: Martin Gebser and Roland Kaminski and Benjamin Kaufmann and Arne König and Torsten Schaub
+    Title: Advances in gringo Series 3
+    Booktitle: Logic Programming and Nonmonotonic Reasoning. International Conference on Logic Programming and Nonmonotonic Reasoning (LPNMR 2011)
+    Editor: James P. Delgrande and Wolfgang Faber
+    Year: 2011
+    Number: 6645
+    Pages: 345–351
+    Type: inproceedings
+    URL: https://arxiv.org/abs/1405.3694
+Repository: https://github.com/potassco/clingo.git
+Repository-Browse: https://github.com/potassco/clingo
