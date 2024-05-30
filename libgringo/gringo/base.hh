@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_BASE_HH
-#define _GRINGO_BASE_HH
+#ifndef GRINGO_BASE_HH
+#define GRINGO_BASE_HH
 
 #include <cassert>
 #include <gringo/term.hh>
@@ -33,17 +33,18 @@ namespace Gringo {
 
 // {{{1 declaration of Context
 
-enum class ScriptType : int {
-    Lua    = 0,
-    Python = 1
-};
-
 class Context {
 public:
+    Context() = default;
+    Context(Context const &other) = default;
+    Context(Context &&other) noexcept = default;
+    Context &operator=(Context const &other) = default;
+    Context &operator=(Context &&other) noexcept = default;
+    virtual ~Context() noexcept = default;
+
     virtual bool callable(String name) = 0;
     virtual SymVec call(Location const &loc, String name, SymSpan args, Logger &log) = 0;
-    virtual void exec(ScriptType type, Location loc, String code) = 0;
-    virtual ~Context() noexcept = default;
+    virtual void exec(String type, Location loc, String code) = 0;
 };
 
 // {{{1 declaration of TheoryAtomType
@@ -84,12 +85,16 @@ std::ostream &operator<<(std::ostream &out, AggregateFunction fun);
 // {{{1 declaration of Bound
 
 struct Bound;
-typedef std::vector<Bound> BoundVec;
+using BoundVec = std::vector<Bound>;
 
 struct Bound {
     Bound(Relation rel, UTerm &&bound);
-    Bound(Bound &&bound) noexcept;
-    Bound& operator=(Bound &&) noexcept;
+    Bound(Bound const &other) = delete;
+    Bound(Bound &&other) noexcept = default;
+    Bound &operator=(Bound const &other) = delete;
+    Bound &operator=(Bound &&other) noexcept = default;
+    ~Bound() noexcept = default;
+
     size_t hash() const;
     bool operator==(Bound const &other) const;
     //! Unpool the terms in the bound.
@@ -144,7 +149,7 @@ inline NAF inv(NAF naf, bool recursive) {
 
 inline std::ostream &operator<<(std::ostream &out, NAF naf) {
     switch (naf) {
-        case NAF::NOTNOT: { out << "not "; }
+        case NAF::NOTNOT: { out << "not "; } // NOLINT
         case NAF::NOT:    { out << "not "; }
         case NAF::POS:    { }
     }
@@ -153,7 +158,7 @@ inline std::ostream &operator<<(std::ostream &out, NAF naf) {
 
 inline std::ostream &operator<<(std::ostream &out, RECNAF naf) {
     switch (naf) {
-        case RECNAF::NOTNOT: { out << "not "; }
+        case RECNAF::NOTNOT: { out << "not "; } // NOLINT
         case RECNAF::RECNOT:
         case RECNAF::NOT:    { out << "not "; }
         case RECNAF::POS:    { }
@@ -237,10 +242,6 @@ inline bool Bound::operator==(Bound const &other) const {
     return rel == other.rel && is_value_equal_to(bound, other.bound);
 }
 
-inline Bound::Bound(Bound &&) noexcept = default;
-
-inline Bound& Bound::operator=(Bound &&) noexcept = default;
-
 inline BoundVec Bound::unpool() {
     BoundVec pool;
     auto f = [&](UTerm &&x) { pool.emplace_back(rel, std::move(x)); };
@@ -249,7 +250,7 @@ inline BoundVec Bound::unpool() {
 }
 
 inline bool Bound::simplify(SimplifyState &state, Logger &log) {
-    return !bound->simplify(state, false, false, log).update(bound).undefined();
+    return !bound->simplify(state, false, false, log).update(bound, false).undefined();
 }
 
 inline void Bound::rewriteArithmetics(Term::ArithmeticsMap &arith, AuxGen &auxGen) {
@@ -260,7 +261,7 @@ inline void Bound::rewriteArithmetics(Term::ArithmeticsMap &arith, AuxGen &auxGe
 template <>
 struct clone<Bound> {
     Bound operator()(Bound const &bound) const {
-        return Bound(bound.rel, get_clone(bound.bound));
+        return {bound.rel, get_clone(bound.bound)};
     }
 };
 
@@ -295,5 +296,4 @@ struct hash<Gringo::NAF> {
 
 } // namespace std
 
-#endif // _GRINGO_BASE_HH
-
+#endif // GRINGO_BASE_HH

@@ -107,15 +107,12 @@ void NonGroundGrammar::parser::error(DefaultLocation const &l, std::string const
 %union
 {
     IdVecUid idlist;
-    CSPLitUid csplit;
-    CSPAddTermUid cspaddterm;
-    CSPMulTermUid cspmulterm;
-    CSPElemVecUid cspelemvec;
     TermUid term;
     TermVecUid termvec;
     TermVecVecUid termvecvec;
     LitVecUid litvec;
     LitUid lit;
+    RelLitVecUid rellitvec;
     BdAggrElemVecUid bodyaggrelemvec;
     CondLitVecUid condlitlist;
     HdAggrElemVecUid headaggrelemvec;
@@ -124,10 +121,6 @@ void NonGroundGrammar::parser::error(DefaultLocation const &l, std::string const
     HdLitUid head;
     Relation rel;
     AggregateFunction fun;
-    struct {
-        NAF first;
-        CSPElemVecUid second;
-    } disjoint;
     struct {
         uintptr_t first;
         unsigned second;
@@ -182,26 +175,22 @@ void NonGroundGrammar::parser::error(DefaultLocation const &l, std::string const
 %type <termvec>         termvec ntermvec consttermvec unaryargvec optimizetuple tuplevec tuplevec_sem
 %type <termvecvec>      argvec constargvec binaryargvec
 %type <lit>             literal
-%type <litvec>          litvec nlitvec optcondition noptcondition
+%type <rellitvec>       rellitvec
+%type <litvec>          litvec nlitvec optcondition
 %type <bodyaggrelem>    bodyaggrelem
 %type <lbodyaggrelem>   altbodyaggrelem conjunction
 %type <bodyaggrelemvec> bodyaggrelemvec
 %type <condlitlist>     altbodyaggrelemvec altheadaggrelemvec disjunctionsep disjunction
 %type <headaggrelemvec> headaggrelemvec
-%type <cspelemvec>      cspelemvec ncspelemvec
 %type <bound>           upper
 %type <body>            bodycomma bodydot bodyconddot optimizelitvec optimizecond
 %type <head>            head
 %type <uid>             lubodyaggregate luheadaggregate
-%type <str>             identifier theory_definition_identifier
+%type <str>             identifier theory_definition_identifier theory_op
 %type <fun>             aggregatefunction
 %type <aggr>            bodyaggregate headaggregate
-%type <rel>             cmp csp_rel
+%type <rel>             cmp
 %type <termpair>        optimizeweight
-%type <cspmulterm>      csp_mul_term
-%type <cspaddterm>      csp_add_term
-%type <csplit>          csp_literal 
-%type <disjoint>        disjoint
 %type <idlist>          idlist nidlist
 %type <theoryOps>       theory_op_list theory_operator_list theory_operator_nlist
 %type <theoryTerm>      theory_term
@@ -230,18 +219,7 @@ void NonGroundGrammar::parser::error(DefaultLocation const &l, std::string const
     COMMA       ","
     CONST       "#const"
     COUNT       "#count"
-    CSP         "$"
-    CSP_ADD     "$+"
-    CSP_SUB     "$-"
-    CSP_MUL     "$*"
-    CSP_LEQ     "$<="
-    CSP_LT      "$<"
-    CSP_GT      "$>"
-    CSP_GEQ     "$>="
-    CSP_EQ      "$="
-    CSP_NEQ     "$!="
     CUMULATIVE  "#cumulative"
-    DISJOINT    "#disjoint"
     DOT         "."
     DOTS        ".."
     END         0 "<EOF>"
@@ -310,8 +288,8 @@ void NonGroundGrammar::parser::error(DefaultLocation const &l, std::string const
 %token <str>
     ANONYMOUS  "<ANONYMOUS>"
     IDENTIFIER "<IDENTIFIER>"
-    PYTHON     "<PYTHON>"
-    LUA        "<LUA>"
+    SCRIPT     "<SCRIPT>"
+    CODE       "<CODE>"
     STRING     "<STRING>"
     VARIABLE   "<VARIABLE>"
     THEORY_OP  "<THEORYOP>"
@@ -497,47 +475,24 @@ atom
     | SUB identifier[id] LPAREN argvec[tvv] RPAREN[r] { $$ = BUILDER.predRep(@$, true, String::fromRep($id), $tvv); }
     ;
 
+rellitvec
+    : cmp[rel] term[r]              { $$ = BUILDER.rellitvec(@$, $rel, $r); }
+    | rellitvec[l] cmp[rel] term[r] { $$ = BUILDER.rellitvec(@$, $l, $rel, $r); }
+    ;
+
 literal
-    :         TRUE                     { $$ = BUILDER.boollit(@$, true); }
-    |     NOT TRUE                     { $$ = BUILDER.boollit(@$, false); }
-    | NOT NOT TRUE                     { $$ = BUILDER.boollit(@$, true); }
-    |         FALSE                    { $$ = BUILDER.boollit(@$, false); }
-    |     NOT FALSE                    { $$ = BUILDER.boollit(@$, true); }
-    | NOT NOT FALSE                    { $$ = BUILDER.boollit(@$, false); }
-    |         atom[a]                  { $$ = BUILDER.predlit(@$, NAF::POS, $a); }
-    |     NOT atom[a]                  { $$ = BUILDER.predlit(@$, NAF::NOT, $a); }
-    | NOT NOT atom[a]                  { $$ = BUILDER.predlit(@$, NAF::NOTNOT, $a); }
-    |         term[l] cmp[rel] term[r] { $$ = BUILDER.rellit(@$, $rel, $l, $r); }
-    |     NOT term[l] cmp[rel] term[r] { $$ = BUILDER.rellit(@$, neg($rel), $l, $r); }
-    | NOT NOT term[l] cmp[rel] term[r] { $$ = BUILDER.rellit(@$, $rel, $l, $r); }
-    | csp_literal[lit]                 { $$ = BUILDER.csplit($lit); }
-    ;
-
-csp_mul_term
-    : CSP term[var] CSP_MUL term[coe] { $$ = BUILDER.cspmulterm(@$, $coe,                     $var); }
-    | term[coe] CSP_MUL CSP term[var] { $$ = BUILDER.cspmulterm(@$, $coe,                     $var); }
-    | CSP term[var]                   { $$ = BUILDER.cspmulterm(@$, BUILDER.term(@$, Symbol::createNum(1)), $var); }
-    | term[coe]                       { $$ = BUILDER.cspmulterm(@$, $coe); }
-    ;
-
-csp_add_term
-    : csp_add_term[add] CSP_ADD csp_mul_term[mul] { $$ = BUILDER.cspaddterm(@$, $add, $mul, true); }
-    | csp_add_term[add] CSP_SUB csp_mul_term[mul] { $$ = BUILDER.cspaddterm(@$, $add, $mul, false); }
-    | csp_mul_term[mul]                           { $$ = BUILDER.cspaddterm(@$, $mul); }
-    ;
-
-csp_rel
-    : CSP_GT  { $$ = Relation::GT; }
-    | CSP_LT  { $$ = Relation::LT; }
-    | CSP_GEQ { $$ = Relation::GEQ; }
-    | CSP_LEQ { $$ = Relation::LEQ; }
-    | CSP_EQ  { $$ = Relation::EQ; }
-    | CSP_NEQ { $$ = Relation::NEQ; }
-    ;
-
-csp_literal 
-    : csp_literal[lit] csp_rel[rel] csp_add_term[b] { $$ = BUILDER.csplit(@$, $lit, $rel, $b); }
-    | csp_add_term[a]  csp_rel[rel] csp_add_term[b] { $$ = BUILDER.csplit(@$, $a,   $rel, $b); }
+    :         TRUE                 { $$ = BUILDER.boollit(@$, true); }
+    |     NOT TRUE                 { $$ = BUILDER.boollit(@$, false); }
+    | NOT NOT TRUE                 { $$ = BUILDER.boollit(@$, true); }
+    |         FALSE                { $$ = BUILDER.boollit(@$, false); }
+    |     NOT FALSE                { $$ = BUILDER.boollit(@$, true); }
+    | NOT NOT FALSE                { $$ = BUILDER.boollit(@$, false); }
+    |         atom[a]              { $$ = BUILDER.predlit(@$, NAF::POS, $a); }
+    |     NOT atom[a]              { $$ = BUILDER.predlit(@$, NAF::NOT, $a); }
+    | NOT NOT atom[a]              { $$ = BUILDER.predlit(@$, NAF::NOTNOT, $a); }
+    |         term[l] rellitvec[r] { $$ = BUILDER.rellit(@$, NAF::POS, $l, $r); }
+    |     NOT term[l] rellitvec[r] { $$ = BUILDER.rellit(@$, NAF::NOT, $l, $r); }
+    | NOT NOT term[l] rellitvec[r] { $$ = BUILDER.rellit(@$, NAF::NOTNOT, $l, $r); }
     ;
 
 // {{{1 aggregates
@@ -557,11 +512,6 @@ litvec
 optcondition
     : COLON litvec[vec] { $$ = $vec; }
     |                   { $$ = BUILDER.litvec(); }
-    ;
-
-noptcondition
-    : COLON nlitvec[vec] { $$ = $vec; }
-    |                    { $$ = BUILDER.litvec(); }
     ;
 
 aggregatefunction
@@ -645,25 +595,7 @@ luheadaggregate
     | theory_atom[atom]                          { $$ = lexer->aggregate($atom); }
     ;
 
-// {{{2 disjoint aggregate
-
-ncspelemvec
-    :                     termvec[tuple] COLON csp_add_term[add] optcondition[cond] { $$ = BUILDER.cspelemvec(BUILDER.cspelemvec(), @$, $tuple, $add, $cond); }
-    | cspelemvec[vec] SEM termvec[tuple] COLON csp_add_term[add] optcondition[cond] { $$ = BUILDER.cspelemvec($vec, @$, $tuple, $add, $cond); }
-    ;
-
-cspelemvec
-    : ncspelemvec[vec] { $$ = $vec; }
-    |                  { $$ = BUILDER.cspelemvec(); }
-    ;
-
-disjoint
-    :         DISJOINT LBRACE cspelemvec[elems] RBRACE { $$ = { NAF::POS, $elems }; }
-    | NOT     DISJOINT LBRACE cspelemvec[elems] RBRACE { $$ = { NAF::NOT, $elems }; }
-    | NOT NOT DISJOINT LBRACE cspelemvec[elems] RBRACE { $$ = { NAF::NOTNOT, $elems }; }
-    ;
-
-///}}}
+/// }}}2
 // {{{2 conjunctions
 
 conjunction
@@ -678,18 +610,22 @@ dsym
     | VBAR
     ;
 
+// NOTE: this is so complicated because VBAR is also used as the absolute function for terms
+//       due to limited lookahead I found no reasonable way to parse p(X):|q(X)
 disjunctionsep
     : disjunctionsep[vec] literal[lit] COMMA                    { $$ = BUILDER.condlitvec($vec, $lit, BUILDER.litvec()); }
-    | disjunctionsep[vec] literal[lit] noptcondition[cond] dsym { $$ = BUILDER.condlitvec($vec, $lit, $cond); }
-    |                                                           { $$ = BUILDER.condlitvec(); }
+    | disjunctionsep[vec] literal[lit] dsym                     { $$ = BUILDER.condlitvec($vec, $lit, BUILDER.litvec()); }
+    | disjunctionsep[vec] literal[lit] COLON SEM                { $$ = BUILDER.condlitvec($vec, $lit, BUILDER.litvec()); }
+    | disjunctionsep[vec] literal[lit] COLON nlitvec[cond] dsym { $$ = BUILDER.condlitvec($vec, $lit, $cond); }
+    | literal[lit] COMMA                                        { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $lit, BUILDER.litvec()); }
+    | literal[lit] dsym                                         { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $lit, BUILDER.litvec()); }
+    | literal[lit] COLON nlitvec[cond] dsym                     { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $lit, $cond); }
+    | literal[lit] COLON SEM                                    { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $lit, BUILDER.litvec()); }
     ;
 
-// Note: for simplicity appending first condlit here
 disjunction
-    : literal[lit] COMMA  disjunctionsep[vec] literal[clit] noptcondition[ccond]                    { $$ = BUILDER.condlitvec(BUILDER.condlitvec($vec, $clit, $ccond), $lit, BUILDER.litvec()); }
-    | literal[lit] dsym    disjunctionsep[vec] literal[clit] noptcondition[ccond]                   { $$ = BUILDER.condlitvec(BUILDER.condlitvec($vec, $clit, $ccond), $lit, BUILDER.litvec()); }
-    | literal[lit]  COLON nlitvec[cond] dsym disjunctionsep[vec] literal[clit] noptcondition[ccond] { $$ = BUILDER.condlitvec(BUILDER.condlitvec($vec, $clit, $ccond), $lit, $cond); }
-    | literal[clit] COLON nlitvec[ccond]                                                            { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $clit, $ccond); }
+    : disjunctionsep[vec] literal[lit] optcondition[cond] { $$ = BUILDER.condlitvec($vec, $lit, $cond); }
+    | literal[lit] COLON litvec[cond]                     { $$ = BUILDER.condlitvec(BUILDER.condlitvec(), $lit, $cond); }
     ;
 
 // {{{1 statements
@@ -705,7 +641,6 @@ bodycomma
     | bodycomma[body] NOT[l] NOT lubodyaggregate[aggr] COMMA  { $$ = lexer->bodyaggregate($body, @aggr + @l, NAF::NOTNOT, $aggr); }
     | bodycomma[body] NOT[l] NOT lubodyaggregate[aggr] SEM    { $$ = lexer->bodyaggregate($body, @aggr + @l, NAF::NOTNOT, $aggr); }
     | bodycomma[body] conjunction[conj] SEM                   { $$ = BUILDER.conjunction($body, @conj, $conj.first, $conj.second); }
-    | bodycomma[body] disjoint[cons] SEM                      { $$ = BUILDER.disjoint($body, @cons, $cons.first, $cons.second); }
     |                                                         { $$ = BUILDER.body(); }
     ;
 
@@ -715,7 +650,6 @@ bodydot
     | bodycomma[body] NOT[l] lubodyaggregate[aggr] DOT      { $$ = lexer->bodyaggregate($body, @aggr + @l, NAF::NOT, $aggr); }
     | bodycomma[body] NOT[l] NOT lubodyaggregate[aggr] DOT  { $$ = lexer->bodyaggregate($body, @aggr + @l, NAF::NOTNOT, $aggr); }
     | bodycomma[body] conjunction[conj] DOT                 { $$ = BUILDER.conjunction($body, @conj, $conj.first, $conj.second); }
-    | bodycomma[body] disjoint[cons] DOT                    { $$ = BUILDER.disjoint($body, @cons, $cons.first, $cons.second); }
     ;
 
 bodyconddot
@@ -735,14 +669,6 @@ statement
     | head[hd] IF bodydot[bd] { BUILDER.rule(@$, $hd, $bd); }
     | IF bodydot[bd]          { BUILDER.rule(@$, BUILDER.headlit(BUILDER.boollit(@$, false)), $bd); }
     | IF DOT                  { BUILDER.rule(@$, BUILDER.headlit(BUILDER.boollit(@$, false)), BUILDER.body()); }
-    ;
-
-// {{{2 CSP
-
-statement
-    : disjoint[hd] IF bodydot[body] { BUILDER.rule(@$, BUILDER.headlit(BUILDER.boollit(@hd, false)), BUILDER.disjoint($body, @hd, inv($hd.first), $hd.second)); }
-    | disjoint[hd] IF DOT           { BUILDER.rule(@$, BUILDER.headlit(BUILDER.boollit(@hd, false)), BUILDER.disjoint(BUILDER.body(), @hd, inv($hd.first), $hd.second)); }
-    | disjoint[hd] DOT              { BUILDER.rule(@$, BUILDER.headlit(BUILDER.boollit(@hd, false)), BUILDER.disjoint(BUILDER.body(), @hd, inv($hd.first), $hd.second)); }
     ;
 
 // {{{2 optimization
@@ -793,14 +719,11 @@ statement
 // {{{2 visibility
 
 statement
-    : SHOWSIG identifier[id] SLASH NUMBER[num] DOT     { BUILDER.showsig(@$, Sig(String::fromRep($id), $num, false), false); }
-    | SHOWSIG SUB identifier[id] SLASH NUMBER[num] DOT { BUILDER.showsig(@$, Sig(String::fromRep($id), $num, true), false); }
-    | SHOW DOT                                         { BUILDER.showsig(@$, Sig("", 0, false), false); }
-    | SHOW term[t] COLON bodydot[bd]                   { BUILDER.show(@$, $t, $bd, false); }
-    | SHOW term[t] DOT                                 { BUILDER.show(@$, $t, BUILDER.body(), false); }
-    | SHOWSIG CSP identifier[id] SLASH NUMBER[num] DOT { BUILDER.showsig(@$, Sig(String::fromRep($id), $num, false), true); }
-    | SHOW CSP term[t] COLON bodydot[bd]               { BUILDER.show(@$, $t, $bd, true); }
-    | SHOW CSP term[t] DOT                             { BUILDER.show(@$, $t, BUILDER.body(), true); }
+    : SHOWSIG identifier[id] SLASH NUMBER[num] DOT     { BUILDER.showsig(@$, Sig(String::fromRep($id), $num, false)); }
+    | SHOWSIG SUB identifier[id] SLASH NUMBER[num] DOT { BUILDER.showsig(@$, Sig(String::fromRep($id), $num, true)); }
+    | SHOW DOT                                         { BUILDER.showsig(@$, Sig("", 0, false)); }
+    | SHOW term[t] COLON bodydot[bd]                   { BUILDER.show(@$, $t, $bd); }
+    | SHOW term[t] DOT                                 { BUILDER.show(@$, $t, BUILDER.body()); }
     ;
 
 // {{{2 warnings
@@ -845,8 +768,7 @@ statement
 // {{{2 scripts
 
 statement
-    : PYTHON[code] DOT { BUILDER.python(@$, String::fromRep($code)); }
-    | LUA[code]    DOT { BUILDER.lua(@$, String::fromRep($code)); }
+    : SCRIPT LPAREN IDENTIFIER[type] RPAREN CODE[code] DOT { BUILDER.script(@$, String::fromRep($type), String::fromRep($code)); }
     ;
 
 // {{{2 include
@@ -886,11 +808,16 @@ statement
 
 // {{{1 theory
 
+theory_op
+    : THEORY_OP[op]  { $$ = $op; }
+    | NOT[not]       { $$ = $not; }
+    ;
+
 // {{{2 theory atoms
 
 theory_op_list
-    : theory_op_list[ops] THEORY_OP[op] { $$ = BUILDER.theoryops($ops, String::fromRep($op)); }
-    | THEORY_OP[op]                     { $$ = BUILDER.theoryops(BUILDER.theoryops(), String::fromRep($op)); }
+    : theory_op_list[ops] theory_op[op] { $$ = BUILDER.theoryops($ops, String::fromRep($op)); }
+    | theory_op[op]                     { $$ = BUILDER.theoryops(BUILDER.theoryops(), String::fromRep($op)); }
     ;
 
 theory_term
@@ -947,14 +874,14 @@ theory_atom_name
 theory_atom
     : AND theory_atom_name[name] { $$ = BUILDER.theoryatom($name, BUILDER.theoryelems()); }
     | AND theory_atom_name[name] enable_theory_lexing LBRACE theory_atom_element_list[elems] enable_theory_lexing RBRACE                                     disable_theory_lexing { $$ = BUILDER.theoryatom($name, $elems); }
-    | AND theory_atom_name[name] enable_theory_lexing LBRACE theory_atom_element_list[elems] enable_theory_lexing RBRACE THEORY_OP[op] theory_opterm[opterm] disable_theory_lexing { $$ = BUILDER.theoryatom($name, $elems, String::fromRep($op), @opterm, $opterm); }
+    | AND theory_atom_name[name] enable_theory_lexing LBRACE theory_atom_element_list[elems] enable_theory_lexing RBRACE theory_op[op] theory_opterm[opterm] disable_theory_lexing { $$ = BUILDER.theoryatom($name, $elems, String::fromRep($op), @opterm, $opterm); }
     ;
 
 // {{{2 theory definition
 
 theory_operator_nlist
-    : THEORY_OP[op]                                  { $$ = BUILDER.theoryops(BUILDER.theoryops(), String::fromRep($op)); }
-    | theory_operator_nlist[ops] COMMA THEORY_OP[op] { $$ = BUILDER.theoryops($ops, String::fromRep($op)); }
+    : theory_op[op]                                  { $$ = BUILDER.theoryops(BUILDER.theoryops(), String::fromRep($op)); }
+    | theory_operator_nlist[ops] COMMA theory_op[op] { $$ = BUILDER.theoryops($ops, String::fromRep($op)); }
     ;
 
 theory_operator_list
@@ -963,9 +890,9 @@ theory_operator_list
     ;
 
 theory_operator_definition
-    : THEORY_OP[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA UNARY              { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::Unary); }
-    | THEORY_OP[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA BINARY COMMA LEFT  { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::BinaryLeft); }
-    | THEORY_OP[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA BINARY COMMA RIGHT { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::BinaryRight); }
+    : theory_op[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA UNARY              { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::Unary); }
+    | theory_op[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA BINARY COMMA LEFT  { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::BinaryLeft); }
+    | theory_op[op] enable_theory_definition_lexing COLON NUMBER[arity] COMMA BINARY COMMA RIGHT { $$ = BUILDER.theoryopdef(@$, String::fromRep($op), $arity, TheoryOperatorType::BinaryRight); }
     ;
 
 theory_operator_definition_nlist

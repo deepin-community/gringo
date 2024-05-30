@@ -1,0 +1,295 @@
+Description: Fix 'catch' & 'catch2' compatibility with glibc-2.34
+ The gringo package contains several embedded copies of the 'catch' (CTest)
+ library. All of those copies are outdated and incompatible with glibc-2.34.
+ This patch updates the test sources to use the system provided versions of
+ 'catch' and 'catch2' instead, to fix this issue.
+ C.f.: https://github.com/catchorg/Catch2/issues/2178
+Author: Lukas Märdian <slyon@ubuntu.com>
+Origin: vendor, Ubuntu
+Bug: https://github.com/potassco/libpotassco/issues/12 (only catch1 part)
+Last-Update: 2022-01-18
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/clasp/libpotassco/tests/main.cpp
++++ b/clasp/libpotassco/tests/main.cpp
+@@ -16,4 +16,4 @@ int enableDebugHeap() {
+ static int eh = enableDebugHeap();
+ #endif
+ #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+--- a/clasp/libpotassco/tests/test_application.cpp
++++ b/clasp/libpotassco/tests/test_application.cpp
+@@ -18,7 +18,7 @@
+ // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ // IN THE SOFTWARE.
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include <potassco/application.h>
+ #include <potassco/program_opts/typed_value.h>
+ #include <signal.h>
+--- a/clasp/libpotassco/tests/test_aspif.cpp
++++ b/clasp/libpotassco/tests/test_aspif.cpp
+@@ -24,7 +24,7 @@
+ #ifdef _MSC_VER
+ #pragma warning (disable : 4996)
+ #endif
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include "test_common.h"
+ #include <potassco/aspif.h>
+ #include <potassco/rule_utils.h>
+--- a/clasp/libpotassco/tests/test_options.cpp
++++ b/clasp/libpotassco/tests/test_options.cpp
+@@ -18,7 +18,7 @@
+ // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ // IN THE SOFTWARE.
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include <potassco/program_opts/program_options.h>
+ #include <potassco/program_opts/typed_value.h>
+ #include <potassco/program_opts/errors.h>
+--- a/clasp/libpotassco/tests/test_smodels.cpp
++++ b/clasp/libpotassco/tests/test_smodels.cpp
+@@ -22,7 +22,7 @@
+ // IN THE SOFTWARE.
+ //
+ 
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include "test_common.h"
+ #include <potassco/convert.h>
+ #include <sstream>
+--- a/clasp/libpotassco/tests/test_string_convert.cpp
++++ b/clasp/libpotassco/tests/test_string_convert.cpp
+@@ -18,7 +18,7 @@
+ // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ // IN THE SOFTWARE.
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include <potassco/string_convert.h>
+ #include <string>
+ #include <sstream>
+--- a/clasp/libpotassco/tests/test_text.cpp
++++ b/clasp/libpotassco/tests/test_text.cpp
+@@ -22,7 +22,7 @@
+ // IN THE SOFTWARE.
+ //
+ 
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include "test_common.h"
+ #include <potassco/aspif_text.h>
+ #include <potassco/aspif.h>
+--- a/clasp/libpotassco/tests/test_value.cpp
++++ b/clasp/libpotassco/tests/test_value.cpp
+@@ -18,7 +18,7 @@
+ // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ // IN THE SOFTWARE.
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #include <potassco/program_opts/value_store.h>
+ #include <potassco/program_opts/mapped_value.h>
+ #include <potassco/program_opts/typed_value.h>
+--- a/clasp/tests/clause_creator_test.cpp
++++ b/clasp/tests/clause_creator_test.cpp
+@@ -24,7 +24,7 @@
+ #include <clasp/clause.h>
+ #include <clasp/solver.h>
+ #include <algorithm>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::mt;
+ 
+--- a/clasp/tests/clause_test.cpp
++++ b/clasp/tests/clause_test.cpp
+@@ -24,7 +24,7 @@
+ #include <clasp/clause.h>
+ #include <clasp/solver.h>
+ #include <algorithm>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #ifdef _MSC_VER
+ #pragma warning (disable : 4267) //  conversion from 'size_t' to unsigned int
+ #pragma once
+--- a/clasp/tests/cli_test.cpp
++++ b/clasp/tests/cli_test.cpp
+@@ -26,7 +26,7 @@
+ #include <clasp/unfounded_check.h>
+ #include <clasp/logic_program.h>
+ #include <fstream>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp {
+ static bool operator==(const ScheduleStrategy& lhs, const ScheduleStrategy& rhs) {
+ 	return lhs.type == rhs.type && lhs.base == rhs.base && lhs.len == rhs.len && lhs.grow == rhs.grow;
+--- a/clasp/tests/decision_heuristic_test.cpp
++++ b/clasp/tests/decision_heuristic_test.cpp
+@@ -27,7 +27,7 @@
+ #include <clasp/clause.h>
+ #include <clasp/solver.h>
+ #include "lpcompare.h"
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+ /////////////////////////////////////////////////////////////////////////////////////////
+--- a/clasp/tests/dependency_graph_test.cpp
++++ b/clasp/tests/dependency_graph_test.cpp
+@@ -24,7 +24,7 @@
+ #include <clasp/dependency_graph.h>
+ #include <clasp/solver.h>
+ #include "lpcompare.h"
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+ 
+--- a/clasp/tests/dlp_builder_test.cpp
++++ b/clasp/tests/dlp_builder_test.cpp
+@@ -26,7 +26,7 @@
+ #include <clasp/unfounded_check.h>
+ #include "lpcompare.h"
+ #include <sstream>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ using namespace std;
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+--- a/clasp/tests/enumerator_test.cpp
++++ b/clasp/tests/enumerator_test.cpp
+@@ -28,7 +28,7 @@
+ #include <clasp/model_enumerators.h>
+ #include "lpcompare.h"
+ #include <sstream>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ using namespace std;
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+--- a/clasp/tests/facade_test.cpp
++++ b/clasp/tests/facade_test.cpp
+@@ -35,7 +35,7 @@
+ #endif
+ #include "lpcompare.h"
+ #include <signal.h>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::mt;
+ 
+--- a/clasp/tests/literal_test.cpp
++++ b/clasp/tests/literal_test.cpp
+@@ -22,7 +22,7 @@
+ // IN THE SOFTWARE.
+ //
+ #include <clasp/solver_types.h>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ 
+ static bool testBin(const Literal& p) {
+--- a/clasp/tests/minimize_test.cpp
++++ b/clasp/tests/minimize_test.cpp
+@@ -28,7 +28,7 @@
+ #include <clasp/solver.h>
+ #include <clasp/solve_algorithms.h>
+ #include <algorithm>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ namespace {
+ struct BranchAndBoundTest {
+--- a/clasp/tests/parser_test.cpp
++++ b/clasp/tests/parser_test.cpp
+@@ -29,7 +29,7 @@
+ #include <potassco/smodels.h>
+ #include <potassco/string_convert.h>
+ #include "lpcompare.h"
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ 
+ template <class Api>
+--- a/clasp/tests/program_builder_test.cpp
++++ b/clasp/tests/program_builder_test.cpp
+@@ -27,7 +27,7 @@
+ #include <clasp/unfounded_check.h>
+ #include <clasp/minimize_constraint.h>
+ #include "lpcompare.h"
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ using namespace std;
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+--- a/clasp/tests/rule_test.cpp
++++ b/clasp/tests/rule_test.cpp
+@@ -27,7 +27,7 @@
+ #include <clasp/solver.h>
+ #include "lpcompare.h"
+ #include <utility>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Potassco {
+ static bool operator==(const LitSpan& lhs, const LitSpan& rhs) {
+ 	return lhs.size == rhs.size && std::equal(begin(lhs), end(lhs), begin(rhs));
+--- a/clasp/tests/satelite_test.cpp
++++ b/clasp/tests/satelite_test.cpp
+@@ -28,7 +28,7 @@
+ #include <clasp/parser.h>
+ #include <algorithm>
+ #include <sstream>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #ifdef _MSC_VER
+ #pragma warning (disable : 4267) //  conversion from 'size_t' to unsigned int
+ #pragma once
+--- a/clasp/tests/solver_test.cpp
++++ b/clasp/tests/solver_test.cpp
+@@ -25,7 +25,7 @@
+ #include <clasp/clause.h>
+ #include <clasp/statistics.h>
+ #include <clasp/weight_constraint.h>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::mt;
+ struct TestingConstraint : public Constraint {
+--- a/clasp/tests/test_main.cpp
++++ b/clasp/tests/test_main.cpp
+@@ -22,7 +22,7 @@
+ // IN THE SOFTWARE.
+ //
+ #define CATCH_CONFIG_RUNNER
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ #if defined (_MSC_VER) && _MSC_VER >= 1200
+ #include <crtdbg.h>
+ #endif
+--- a/clasp/tests/unfounded_check_test.cpp
++++ b/clasp/tests/unfounded_check_test.cpp
+@@ -26,7 +26,7 @@
+ #include <clasp/clause.h>
+ #include "lpcompare.h"
+ #include <memory>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ namespace Clasp { namespace Test {
+ using namespace Clasp::Asp;
+ 
+--- a/clasp/tests/weight_constraint_test.cpp
++++ b/clasp/tests/weight_constraint_test.cpp
+@@ -24,7 +24,7 @@
+ #include <clasp/weight_constraint.h>
+ #include <clasp/solver.h>
+ #include <algorithm>
+-#include "catch.hpp"
++#include <catch/catch.hpp>
+ using namespace std;
+ 
+ namespace Clasp { namespace Test {

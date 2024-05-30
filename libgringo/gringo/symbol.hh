@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_VALUE_HH
-#define _GRINGO_VALUE_HH
+#ifndef GRINGO_SYMBOL_HH
+#define GRINGO_SYMBOL_HH
 
 #include <cstdint>
 #include <cstring>
@@ -49,18 +49,20 @@ class String {
 public:
     String(StringSpan str);
     String(char const *str);
-    const char *c_str() const { return str_; }
+
+    const char *c_str() const;
     bool empty() const;
-    size_t length() { return std::strlen(str_); }
-    bool startsWith(char const *prefix) const {
-        return std::strncmp(prefix, str_, strlen(prefix)) == 0;
-    }
+    size_t length() const;
+    bool startsWith(char const *prefix) const;
     size_t hash() const;
-    static uintptr_t toRep(String s);
-    static String fromRep(uintptr_t t);
+    static uintptr_t toRep(String s) noexcept;
+    static String fromRep(uintptr_t t) noexcept;
+
 private:
-    String(uintptr_t);
-    char const *str_;
+    class Impl;
+
+    String(uintptr_t) noexcept;
+    Impl *str_;
 };
 
 inline bool operator==(String a, String b) { return std::strcmp(a.c_str(), b.c_str()) == 0; }
@@ -95,6 +97,7 @@ class Sig {
 public:
     Sig(String name, uint32_t arity, bool sign);
     explicit Sig(uint64_t rep) : rep_(rep) {  }
+
     String name() const;
     Sig flipSign() const;
     uint32_t arity() const;
@@ -113,6 +116,7 @@ public:
     bool operator>(Sig s) const;
     bool operator<=(Sig s) const;
     bool operator>=(Sig s) const;
+
 private:
     uint64_t rep_;
 };
@@ -133,6 +137,7 @@ enum class SymbolType : uint8_t {
     Special = 6,
     Sup     = 7
 };
+
 inline std::ostream &operator<<(std::ostream &out, SymbolType sym) {
     switch (sym) {
         case SymbolType::Inf: { out << "Inf"; break; }
@@ -160,10 +165,14 @@ public:
     static Symbol createNum(int num);
     static Symbol createInf();
     static Symbol createSup();
-    static Symbol createTuple(SymSpan val);
-    static Symbol createTuple(SymVec const &val) { return createTuple(Potassco::toSpan(val)); }
-    static Symbol createFun(String name, SymSpan val, bool sign = false);
-    static Symbol createFun(String name, SymVec const &val, bool sign = false) { return createFun(name, Potassco::toSpan(val), sign); }
+    static Symbol createTuple(SymSpan args);
+    static Symbol createTuple(SymVec const &args) {
+        return createTuple(Potassco::toSpan(args));
+    }
+    static Symbol createFun(String name, SymSpan args, bool sign = false);
+    static Symbol createFun(String name, SymVec const &args, bool sign = false) {
+        return createFun(name, Potassco::toSpan(args), sign);
+    }
 
     // value retrieval
     SymbolType type() const;
@@ -177,7 +186,7 @@ public:
     bool sign() const;
 
     // modifying values
-    Symbol replace(IdSymMap const &rep) const;
+    Symbol replace(IdSymMap const &map) const;
     Symbol flipSign() const;
 
     // comparison
@@ -297,5 +306,5 @@ struct hash<Gringo::Symbol> {
 
 } // namespace std
 
-#endif // _GRINGO_VALUE_HH
+#endif // GRINGO_SYMBOL_HH
 

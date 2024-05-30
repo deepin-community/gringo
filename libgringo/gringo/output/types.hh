@@ -22,42 +22,25 @@
 
 // }}}
 
-#ifndef _GRINGO_OUTPUT_TYPES_HH
-#define _GRINGO_OUTPUT_TYPES_HH
+#ifndef GRINGO_OUTPUT_TYPES_HH
+#define GRINGO_OUTPUT_TYPES_HH
 
 #include <gringo/domain.hh>
 #include <gringo/types.hh>
 
 namespace Gringo { namespace Output {
 
-class Translator;
-class TheoryData;
-class PredicateDomain;
-class LiteralId;
-class DisjointElement;
-class Statement;
-struct AuxAtom;
-struct PrintPlain;
-class DomainData;
-class OutputBase;
-
-using LitVec = std::vector<LiteralId>;
 using ClauseId = std::pair<Id_t, Id_t>;
+using ClauseSpan = Potassco::Span<ClauseId>;
 using FormulaId = std::pair<Id_t, Id_t>;
 using Formula = std::vector<ClauseId>;
-using CSPBound = std::pair<int, int>;
 using AssignmentLookup = std::function<std::pair<bool, Potassco::Value_t>(unsigned)>; // (isExternal, truthValue)
 using IsTrueLookup = std::function<bool(unsigned)>;
-using OutputPredicates = std::vector<std::tuple<Location, Sig, bool>>;
-using CoefVarVec = std::vector<std::pair<int, Symbol>>;
-
-struct UPredDomHash;
-struct UPredDomEqualTo;
-using PredDomMap = UniqueVec<std::unique_ptr<PredicateDomain>, UPredDomHash, UPredDomEqualTo>;
+class OutputPredicates;
 
 enum class OutputDebug { NONE, TEXT, TRANSLATE, ALL };
 enum class OutputFormat { TEXT, INTERMEDIATE, SMODELS, REIFY };
 
 } } // namespace Output Gringo
 
-#endif // _GRINGO_OUTPUT_TYPES_HH
+#endif // GRINGO_OUTPUT_TYPES_HH

@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_PRINTABLE_HH
-#define _GRINGO_PRINTABLE_HH
+#ifndef GRINGO_PRINTABLE_HH
+#define GRINGO_PRINTABLE_HH
 
 #include <ostream>
 
@@ -33,8 +33,14 @@ namespace Gringo {
 
 class Printable {
 public:
+    Printable() = default;
+    Printable(Printable const &other) = default;
+    Printable(Printable && other) noexcept = default;
+    Printable &operator=(Printable const &other) = default;
+    Printable &operator=(Printable &&other) noexcept = default;
+    virtual ~Printable() noexcept = default;
+
     virtual void print(std::ostream &out) const = 0;
-    virtual ~Printable() { }
 };
 
 inline std::ostream &operator<<(std::ostream &out, Printable const &x) {
@@ -46,5 +52,4 @@ inline std::ostream &operator<<(std::ostream &out, Printable const &x) {
 
 } // namespace Gringo
 
-#endif // _GRINGO_PRINTABLE_HH
-
+#endif // GRINGO_PRINTABLE_HH

@@ -80,8 +80,8 @@ public:
 struct ClingoState {
     ClingoState()
     : out(td, {}, ss, OutputFormat::INTERMEDIATE)
-    , pb(context, prg, out, defs)
-    , parser(pb, incmode) {
+    , pb(context, prg, out.outPreds, defs)
+    , parser(pb, bck, incmode) {
     }
     Gringo::Test::TestGringoModule module;
     std::stringstream ss;
@@ -90,6 +90,7 @@ struct ClingoState {
     Input::Program prg;
     Defines defs;
     Gringo::Test::TestContext context;
+    NullBackend bck;
     Input::NongroundProgramBuilder pb;
     Input::NonGroundParser parser;
     bool incmode;
@@ -103,7 +104,8 @@ inline bool ground(ClingoState &state) {
         state.out.beginStep();
         Ground::Parameters params;
         params.add("base", {});
-        gPrg.ground(params, state.context, state.out, state.module);
+        gPrg.prepare(params, state.out, state.module);
+        gPrg.ground(state.context, state.out, state.module);
         state.out.endStep({});
         return true;
     }

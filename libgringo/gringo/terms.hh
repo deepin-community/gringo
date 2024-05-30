@@ -22,9 +22,10 @@
 
 // }}}
 
-#ifndef _GRINGO_TERMS_HH
-#define _GRINGO_TERMS_HH
+#ifndef GRINGO_TERMS_HH
+#define GRINGO_TERMS_HH
 
+#include <gringo/utility.hh>
 #include <gringo/base.hh>
 #include <gringo/term.hh>
 #include <gringo/hash_set.hh>
@@ -38,7 +39,7 @@ using StringVec = std::vector<String>;
 template <class T>
 struct GetName {
     using result_type = String;
-    String operator()(T const &x) const {
+    String const &operator()(T const &x) const {
         return x.name();
     }
 };
@@ -53,24 +54,34 @@ public:
             return x.key();
         }
     };
-public:
+
     TheoryOpDef(Location const &loc, String op, unsigned priority, TheoryOperatorType type);
-    TheoryOpDef(TheoryOpDef &&);
-    ~TheoryOpDef() noexcept;
-    TheoryOpDef &operator=(TheoryOpDef &&);
+    TheoryOpDef(TheoryOpDef const &other) = delete;
+    TheoryOpDef(TheoryOpDef &&other) noexcept = default;
+    TheoryOpDef &operator=(TheoryOpDef const &other) = delete;
+    TheoryOpDef &operator=(TheoryOpDef &&other) noexcept = default;
+    ~TheoryOpDef() noexcept = default;
+
     String op() const;
-    Key key() const;
+    Key key() const noexcept;
     Location const &loc() const;
     void print(std::ostream &out) const;
     unsigned priority() const;
     TheoryOperatorType type() const;
+
 private:
     Location loc_;
     String op_;
     unsigned priority_;
     TheoryOperatorType type_;
 };
-using TheoryOpDefs = UniqueVec<TheoryOpDef, HashKey<TheoryOpDef::Key, TheoryOpDef::GetKey, value_hash<TheoryOpDef::Key>>, EqualToKey<TheoryOpDef::Key, TheoryOpDef::GetKey>>;
+
+using TheoryOpDefs =
+    ordered_set<
+        TheoryOpDef,
+        HashKey<TheoryOpDef::Key, TheoryOpDef::GetKey, mix_value_hash<TheoryOpDef::Key>>,
+        EqualToKey<TheoryOpDef::Key, TheoryOpDef::GetKey>>;
+
 inline std::ostream &operator<<(std::ostream &out, TheoryOpDef const &def) {
     def.print(out);
     return out;
@@ -81,23 +92,40 @@ inline std::ostream &operator<<(std::ostream &out, TheoryOpDef const &def) {
 class TheoryTermDef {
 public:
     TheoryTermDef(Location const &loc, String name);
-    TheoryTermDef(TheoryTermDef &&);
-    ~TheoryTermDef() noexcept;
-    TheoryTermDef &operator=(TheoryTermDef &&);
-    void addOpDef(TheoryOpDef &&def, Logger &log);
-    String name() const;
+    TheoryTermDef(TheoryTermDef const &other) = delete;
+    TheoryTermDef(TheoryTermDef &&other) noexcept = default;
+    TheoryTermDef &operator=(TheoryTermDef const &other) = delete;
+    // Note: for some reason the compiler thinks it cannot generate a noexcept
+    // move assignment operator.
+    TheoryTermDef &operator=(TheoryTermDef &&other) noexcept {
+        loc_ = other.loc_;
+        name_ = other.name_;
+        opDefs_ = std::move(other.opDefs_);
+        return *this;
+    }
+    ~TheoryTermDef() noexcept = default;
+
+    void addOpDef(TheoryOpDef &&def, Logger &log) const;
+    String const &name() const noexcept;
     Location const &loc() const;
     void print(std::ostream &out) const;
     // returns (priority, flag) where flag is true if the binary operator is left associative
     std::pair<unsigned, bool> getPrioAndAssoc(String op) const;
     unsigned getPrio(String op, bool unary) const;
     bool hasOp(String op, bool unary) const;
+
 private:
     Location loc_;
     String name_;
-    TheoryOpDefs opDefs_;
+    mutable TheoryOpDefs opDefs_;
 };
-using TheoryTermDefs = UniqueVec<TheoryTermDef, HashKey<String, GetName<TheoryTermDef>>, EqualToKey<String, GetName<TheoryTermDef>>>;
+
+using TheoryTermDefs =
+    ordered_set<
+        TheoryTermDef,
+        HashKey<String, GetName<TheoryTermDef>, mix_hash<String>>,
+        EqualToKey<String, GetName<TheoryTermDef>>>;
+
 inline std::ostream &operator<<(std::ostream &out, TheoryTermDef const &def) {
     def.print(out);
     return out;
@@ -113,12 +141,15 @@ public:
             return x.sig();
         }
     };
-public:
+
     TheoryAtomDef(Location const &loc, String name, unsigned arity, String elemDef, TheoryAtomType type);
     TheoryAtomDef(Location const &loc, String name, unsigned arity, String elemDef, TheoryAtomType type, StringVec &&ops, String guardDef);
-    TheoryAtomDef(TheoryAtomDef &&);
-    ~TheoryAtomDef() noexcept;
-    TheoryAtomDef &operator=(TheoryAtomDef &&);
+    TheoryAtomDef(TheoryAtomDef const &other) = delete;
+    TheoryAtomDef(TheoryAtomDef &&other) noexcept = default;
+    TheoryAtomDef &operator=(TheoryAtomDef const &other) = delete;
+    TheoryAtomDef &operator=(TheoryAtomDef &&other) noexcept = default;
+    ~TheoryAtomDef() noexcept = default;
+
     Sig sig() const;
     bool hasGuard() const;
     TheoryAtomType type() const;
@@ -127,6 +158,7 @@ public:
     String elemDef() const;
     String guardDef() const;
     void print(std::ostream &out) const;
+
 private:
     Location loc_;
     Sig sig_;
@@ -135,7 +167,13 @@ private:
     StringVec ops_;
     TheoryAtomType type_;
 };
-using TheoryAtomDefs = UniqueVec<TheoryAtomDef, HashKey<TheoryAtomDef::Key, TheoryAtomDef::GetKey, value_hash<TheoryAtomDef::Key>>, EqualToKey<TheoryAtomDef::Key, TheoryAtomDef::GetKey>>;
+
+using TheoryAtomDefs =
+    ordered_set<
+        TheoryAtomDef,
+        HashKey<TheoryAtomDef::Key, TheoryAtomDef::GetKey, mix_value_hash<TheoryAtomDef::Key>>,
+        EqualToKey<TheoryAtomDef::Key, TheoryAtomDef::GetKey>>;
+
 inline std::ostream &operator<<(std::ostream &out, TheoryAtomDef const &def) {
     def.print(out);
     return out;
@@ -146,128 +184,40 @@ inline std::ostream &operator<<(std::ostream &out, TheoryAtomDef const &def) {
 class TheoryDef {
 public:
     TheoryDef(Location const &loc, String name);
-    TheoryDef(TheoryDef &&);
-    ~TheoryDef() noexcept;
-    TheoryDef &operator=(TheoryDef &&);
-    String name() const;
-    void addAtomDef(TheoryAtomDef &&def, Logger &log);
-    void addTermDef(TheoryTermDef &&def, Logger &log);
-    TheoryAtomDef const *getAtomDef(Sig name) const;
+    TheoryDef(TheoryDef const &other) = delete;
+    TheoryDef(TheoryDef &&other) noexcept = default;
+    TheoryDef &operator=(TheoryDef const &other) = delete;
+    TheoryDef &operator=(TheoryDef &&other) noexcept = default;
+    ~TheoryDef() noexcept = default;
+
+    String const &name() const noexcept;
+    void addAtomDef(TheoryAtomDef &&def, Logger &log) const;
+    void addTermDef(TheoryTermDef &&def, Logger &log) const;
+    TheoryAtomDef const *getAtomDef(Sig sig) const;
     TheoryTermDef const *getTermDef(String name) const;
     TheoryAtomDefs const &atomDefs() const;
     Location const &loc() const;
     void print(std::ostream &out) const;
+
 private:
     Location loc_;
-    TheoryTermDefs termDefs_;
-    TheoryAtomDefs atomDefs_;
     String name_;
+    mutable TheoryTermDefs termDefs_;
+    mutable TheoryAtomDefs atomDefs_;
 };
-using TheoryDefs = UniqueVec<TheoryDef, HashKey<String, GetName<TheoryDef>>, EqualToKey<String, GetName<TheoryDef>>>;
+
+using TheoryDefs =
+    ordered_set<
+        TheoryDef,
+        HashKey<String, GetName<TheoryDef>, mix_hash<String>>,
+        EqualToKey<String, GetName<TheoryDef>>>;
+
 inline std::ostream &operator<<(std::ostream &out, TheoryDef const &def) {
     def.print(out);
     return out;
 }
 // }}}1
 
-// {{{1 declaration of CSPMulTerm
-
-struct CSPMulTerm {
-    CSPMulTerm(UTerm &&var, UTerm &&coe);
-    CSPMulTerm(CSPMulTerm &&x);
-    CSPMulTerm &operator=(CSPMulTerm &&x);
-    void collect(VarTermBoundVec &vars) const;
-    void collect(VarTermSet &vars) const;
-    void replace(Defines &x);
-    bool operator==(CSPMulTerm const &x) const;
-    bool simplify(SimplifyState &state, Logger &log);
-    void rewriteArithmetics(Term::ArithmeticsMap &arith, AuxGen &auxGen);
-    size_t hash() const;
-    bool hasPool() const;
-    std::vector<CSPMulTerm> unpool() const;
-    ~CSPMulTerm();
-
-    UTerm var;
-    UTerm coe;
-};
-
-std::ostream &operator<<(std::ostream &out, CSPMulTerm const &x);
-
-template <>
-struct clone<CSPMulTerm> {
-    CSPMulTerm operator()(CSPMulTerm const &x) const;
-};
-
-// {{{1 declaration of CSPAddTerm
-
-using CSPGroundAdd = std::vector<std::pair<int,Symbol>>;
-using CSPGroundLit = std::tuple<Relation, CSPGroundAdd, int>;
-
-struct CSPAddTerm {
-    using Terms = std::vector<CSPMulTerm>;
-
-    CSPAddTerm(CSPMulTerm &&x);
-    CSPAddTerm(CSPAddTerm &&x);
-    CSPAddTerm(Terms &&terms);
-    CSPAddTerm &operator=(CSPAddTerm &&x);
-    void append(CSPMulTerm &&x);
-    bool simplify(SimplifyState &state, Logger &log);
-    void collect(VarTermBoundVec &vars) const;
-    void collect(VarTermSet &vars) const;
-    void replace(Defines &x);
-    bool operator==(CSPAddTerm const &x) const;
-    void rewriteArithmetics(Term::ArithmeticsMap &arith, AuxGen &auxGen);
-    std::vector<CSPAddTerm> unpool() const;
-    size_t hash() const;
-    bool hasPool() const;
-    void toGround(CSPGroundLit &ground, bool invert, Logger &log) const;
-    bool checkEval(Logger &log) const;
-    ~CSPAddTerm();
-
-    Terms terms;
-};
-
-std::ostream &operator<<(std::ostream &out, CSPAddTerm const &x);
-
-template <>
-struct clone<CSPAddTerm> {
-    CSPAddTerm operator()(CSPAddTerm const &x) const;
-};
-
-// {{{1 declaration of CSPRelTerm
-
-struct CSPRelTerm {
-    CSPRelTerm(CSPRelTerm &&x);
-    CSPRelTerm(Relation rel, CSPAddTerm &&x);
-    CSPRelTerm &operator=(CSPRelTerm &&x);
-    void collect(VarTermBoundVec &vars) const;
-    void collect(VarTermSet &vars) const;
-    void replace(Defines &x);
-    bool operator==(CSPRelTerm const &x) const;
-    bool simplify(SimplifyState &state, Logger &log);
-    void rewriteArithmetics(Term::ArithmeticsMap &arith, AuxGen &auxGen);
-    size_t hash() const;
-    bool hasPool() const;
-    std::vector<CSPRelTerm> unpool() const;
-    ~CSPRelTerm();
-
-    Relation rel;
-    CSPAddTerm term;
-};
-
-std::ostream &operator<<(std::ostream &out, CSPRelTerm const &x);
-
-template <>
-struct clone<CSPRelTerm> {
-    CSPRelTerm operator()(CSPRelTerm const &x) const;
-};
-
-// }}}1
-
 } // namespace Gringo
 
-GRINGO_CALL_HASH(Gringo::CSPRelTerm)
-GRINGO_CALL_HASH(Gringo::CSPMulTerm)
-GRINGO_CALL_HASH(Gringo::CSPAddTerm)
-
-#endif // _GRINGO_TERMS_HH
+#endif // GRINGO_TERMS_HH

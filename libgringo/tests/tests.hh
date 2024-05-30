@@ -25,7 +25,8 @@
 #ifndef _GRINGO_TEST_TESTS_HH
 #define _GRINGO_TEST_TESTS_HH
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
+#include "gringo/backend.hh"
 #include "gringo/utility.hh"
 #include "gringo/logger.hh"
 #include "gringo/base.hh"
@@ -314,7 +315,7 @@ struct TestGringoModule {
 struct TestContext : Context {
     bool callable(String) override { return false; }
     SymVec call(Location const &, String, SymSpan, Logger &) override { throw std::runtime_error("not implemented"); }
-    void exec(ScriptType, Location, String) override { throw std::runtime_error("not implemented"); }
+    void exec(String type, Location, String) override { throw std::runtime_error("not implemented"); }
 };
 
 inline std::ostream &operator<<(std::ostream &out, TestGringoModule const &mod) {

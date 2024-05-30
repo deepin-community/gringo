@@ -23,7 +23,6 @@
 // }}}
 
 #include <clingo/clingo_app.hh>
-#include <clingo/script.h>
 #include <clasp/parser.h>
 #include <climits>
 
@@ -78,13 +77,13 @@ void ClingoApp::initOptions(Potassco::ProgramOptions::OptionContext& root) {
          "      [no-]atom-undefined:      a :- b.\n"
          "      [no-]file-included:       #include \"a.lp\". #include \"a.lp\".\n"
          "      [no-]operation-undefined: p(1/0).\n"
-         "      [no-]variable-unbounded:  $x > 10.\n"
          "      [no-]global-variable:     :- #count { X } = 1, X = 1.\n"
          "      [no-]other:               clasp related and uncategorized warnings")
         ("rewrite-minimize,@1"      , flag(grOpts_.rewriteMinimize = false), "Rewrite minimize constraints into rules")
         ("keep-facts,@1"            , flag(grOpts_.keepFacts = false), "Do not remove facts from normal rules")
         ("reify-sccs,@1"            , flag(grOpts_.outputOptions.reifySCCs = false), "Calculate SCCs for reified output")
         ("reify-steps,@1"           , flag(grOpts_.outputOptions.reifySteps = false), "Add step numbers to reified output")
+        ("single-shot,@2"           , flag(grOpts_.singleShot = false), "Force single-shot solving mode")
         ("foobar,@4"                , storeTo(grOpts_.foobar, parseFoobar) , "Foobar")
         ;
     root.add(gringo);
@@ -145,15 +144,15 @@ void ClingoApp::addOption(char const *group, char const *option, char const *des
     using namespace Potassco::ProgramOptions;
     optionParsers_.emplace_front(parse);
     std::unique_ptr<Value> value{notify(&optionParsers_.front(), [](OptionParser *p, std::string const &, std::string const &value){ return (*p)(value.c_str()); })};
-    if (argument) { value->arg(argument); }
+    if (argument) { value->arg(String(argument).c_str()); }
     if (multi) { value->composing(); }
-    addGroup_(group).addOptions()(option, value.release(), description);
+    addGroup_(group).addOptions()(String(option).c_str(), value.release(), String(description).c_str());
 }
 
 void ClingoApp::addFlag(char const *group, char const *option, char const *description, bool &target) {
     using namespace Potassco::ProgramOptions;
     std::unique_ptr<Value> value{flag(target)};
-    addGroup_(group).addOptions()(option, value.release(), description);
+    addGroup_(group).addOptions()(String(option).c_str(), value.release()->negatable(), String(description).c_str());
 }
 
 Clasp::ProblemType ClingoApp::getProblemType() {
@@ -245,8 +244,8 @@ void ClingoApp::printHelp(const Potassco::ProgramOptions::OptionContext& root) {
 }
 
 void ClingoApp::printVersion() {
-    char const *py_version = clingo_script_version_(clingo_ast_script_type_python);
-    char const *lua_version = clingo_script_version_(clingo_ast_script_type_lua);
+    char const *py_version = clingo_script_version("python");
+    char const *lua_version = clingo_script_version("lua");
     Potassco::Application::printVersion();
     printf("\n");
     printf("libclingo version " CLINGO_VERSION "\n");

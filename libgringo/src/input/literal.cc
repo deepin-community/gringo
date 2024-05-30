@@ -26,42 +26,43 @@
 
 namespace Gringo { namespace Input {
 
-// {{{ definition of Projection
-
-Projection::Projection(UTerm &&projected, UTerm &&project)
-: projected(std::move(projected))
-, project(std::move(project)) { }
-
-Projection::Projection(Projection &&) = default;
-Projection &Projection::operator=(Projection &&) = default;
-
-Projection::~Projection() = default;
-
-Projection::operator Term const &() const { return *projected; }
-
-// }}}
 // {{{ definition of Projections
 
-Projections::Projections() = default;
-
-Projections::Projections(Projections &&) = default;
-
-Projections::~Projections() = default;
-
-Projections::ProjectionMap::Iterator Projections::begin() {
+Projections::ProjectionMap::iterator Projections::begin() {
     return proj.begin();
 }
-Projections::ProjectionMap::Iterator Projections::end() {
+
+Projections::ProjectionMap::iterator Projections::end() {
     return proj.end();
 }
 
 UTerm Projections::add(Term &term) {
     AuxGen gen;
     auto ret(term.project(true, gen));
-    proj.push(std::move(std::get<1>(ret)), std::move(std::get<2>(ret)));
+    proj.try_emplace(std::move(std::get<1>(ret)), std::move(std::get<2>(ret)), false);
     return std::move(std::get<0>(ret));
 }
 
 // }}}
 
+// {{{ definition of Literal
+
+void Literal::addToSolver(IESolver &solver, bool invert) const {
+    static_cast<void>(solver);
+    static_cast<void>(invert);
+}
+
+ULitVecVec Literal::unpoolComparison() const {
+    ULitVecVec ret;
+    ret.emplace_back();
+    ret.back().emplace_back(clone());
+    return ret;
+}
+
+bool Literal::hasUnpoolComparison() const {
+    return false;
+}
+
+// }}}
+//
 } } // namespace Input Gringo

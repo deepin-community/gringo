@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_LOCATABLE_HH
-#define _GRINGO_LOCATABLE_HH
+#ifndef GRINGO_LOCATABLE_HH
+#define GRINGO_LOCATABLE_HH
 
 #include <gringo/symbol.hh>
 #include <gringo/utility.hh>
@@ -34,8 +34,11 @@ namespace Gringo {
 
 struct Location {
     Location(String beginFilename, unsigned beginLine, unsigned beginColumn, String endFilename, unsigned endLine, unsigned endColumn);
-    //Location(Location const &loc);
-    //Location(Location &&loc);
+    Location(Location const &other) noexcept = default;
+    Location(Location &&other) noexcept = default;
+    Location &operator=(Location const &other) noexcept = default;
+    Location &operator=(Location &&other) noexcept = default;
+    ~Location() noexcept = default;
 
     String beginFilename;
     String endFilename;
@@ -46,6 +49,7 @@ struct Location {
 
     Location operator+(Location const &other) const;
     bool operator<(Location const &other) const;
+    bool operator==(Location const &other) const;
 };
 
 std::ostream &operator<<(std::ostream &out, Location const &loc);
@@ -55,9 +59,15 @@ std::ostream &operator<<(std::ostream &out, Location const &loc);
 
 class Locatable {
 public:
+    Locatable() = default;
+    Locatable(Locatable const &other) = default;
+    Locatable(Locatable && other) noexcept = default;
+    Locatable &operator=(Locatable const &other) = default;
+    Locatable &operator=(Locatable &&other) noexcept = default;
+    virtual ~Locatable() noexcept = default;
+
     virtual Location const &loc() const = 0;
     virtual void loc(Location const &loc) = 0;
-    virtual ~Locatable() { }
 };
 
 // }}}
@@ -68,9 +78,14 @@ class LocatableClass : public T {
 public:
     template <typename... Args>
     LocatableClass(Location const &loc, Args&&... args);
+    LocatableClass(LocatableClass const &other) = default;
+    LocatableClass(LocatableClass &&other) noexcept = default;
+    LocatableClass &operator=(LocatableClass const &other) = default;
+    LocatableClass &operator=(LocatableClass &&other) noexcept = default;
+    virtual ~LocatableClass() noexcept = default;
+
     virtual void loc(Location const &loc) final;
     virtual Location const &loc() const final;
-    virtual ~LocatableClass();
 private:
     Location loc_;
 };
@@ -94,16 +109,25 @@ inline Location::Location(String beginFilename, unsigned beginLine, unsigned beg
     , endColumn(endColumn) { }
 
 inline Location Location::operator+(Location const &other) const {
-    return Location(beginFilename, beginLine, beginColumn, other.endFilename, other.endLine, other.endColumn);
+    return {beginFilename, beginLine, beginColumn, other.endFilename, other.endLine, other.endColumn};
 }
 
-inline bool Location::operator<(Location const &x) const {
-    if (beginFilename != x.beginFilename) { return beginFilename < x.beginFilename; }
-    if (endFilename != x.endFilename) { return endFilename < x.endFilename; }
-    if (beginLine != x.beginLine) { return beginLine < x.beginLine; }
-    if (endLine != x.endLine) { return endLine < x.endLine; }
-    if (beginColumn != x.beginColumn) { return beginColumn < x.beginColumn; }
-    return endColumn < x.endColumn;
+inline bool Location::operator<(Location const &other) const {
+    if (beginFilename != other.beginFilename) { return beginFilename < other.beginFilename; }
+    if (endFilename != other.endFilename) { return endFilename < other.endFilename; }
+    if (beginLine != other.beginLine) { return beginLine < other.beginLine; }
+    if (endLine != other.endLine) { return endLine < other.endLine; }
+    if (beginColumn != other.beginColumn) { return beginColumn < other.beginColumn; }
+    return endColumn < other.endColumn;
+}
+
+inline bool Location::operator==(Location const &other) const {
+    return beginFilename == other.beginFilename &&
+           endFilename == other.endFilename &&
+           beginLine == other.beginLine &&
+           endLine == other.endLine &&
+           beginColumn == other.beginColumn &&
+           endColumn == other.endColumn;
 }
 
 inline std::ostream &operator<<(std::ostream &out, Location const &loc) {
@@ -139,9 +163,6 @@ void LocatableClass<T>::loc(Location const &loc) {
     loc_ = loc;
 }
 
-template <class T>
-LocatableClass<T>::~LocatableClass() { }
-
 // }}}
 // {{{ defintion of make_locatable<T, Args>
 
@@ -154,4 +175,4 @@ std::unique_ptr<T> make_locatable(Location const &loc, Args&&... args) {
 
 } // namespace Gringo
 
-#endif // _GRINGO_LOCATABLE_HH
+#endif // GRINGO_LOCATABLE_HH

@@ -22,22 +22,22 @@
 
 // }}}
 
-#ifndef _GRINGO_TYPES_HH
-#define _GRINGO_TYPES_HH
+#ifndef GRINGO_TYPES_HH
+#define GRINGO_TYPES_HH
 
 #include <potassco/basic_types.h>
 #include <limits>
 
 namespace Gringo {
 
-class Context;
 using Atom_t = Potassco::Atom_t;
 using Weight_t = Potassco::Weight_t;
 using Lit_t = Potassco::Lit_t;
 using Id_t = Potassco::Id_t;
+using Potassco::IdSpan;
 
 static constexpr Id_t InvalidId = std::numeric_limits<Id_t>::max();
 
 } // namespace Gringo
 
-#endif // _GRINGO_TYPES_HH
+#endif // GRINGO_TYPES_HH

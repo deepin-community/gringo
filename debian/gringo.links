@@ -1,6 +1,6 @@
 usr/bin/clingo usr/bin/iclingo
 usr/bin/clingo usr/bin/oclingo
-usr/lib/libclingo.so.3.0 usr/lib/libclingo.so.3
-usr/lib/libclingo.so.3 usr/lib/libclingo.so
+usr/lib/libclingo.so.4.0 usr/lib/libclingo.so.4
+usr/lib/libclingo.so.4 usr/lib/libclingo.so
 usr/share/man/man1/clingo.1 usr/share/man/man1/iclingo.1
 usr/share/man/man1/clingo.1 usr/share/man/man1/oclingo.1

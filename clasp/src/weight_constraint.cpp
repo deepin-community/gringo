@@ -40,6 +40,10 @@ namespace Clasp {
 // return: achievable weight
 // post  : lits is sorted by decreasing weights
 WeightLitsRep WeightLitsRep::create(Solver& s, WeightLitVec& lits, weight_t bound) {
+	// Step 0: Ensure s has all relevant problem variables
+	if (s.numProblemVars() > s.numVars() && !lits.empty()) {
+		s.acquireProblemVar(std::max_element(lits.begin(), lits.end())->first.var());
+	}
 	// Step 1: remove assigned/superfluous literals and merge duplicate/complementary ones
 	LitVec::size_type j = 0, other;
 	const weight_t MAX_W= std::numeric_limits<weight_t>::max();
@@ -191,10 +195,16 @@ WeightConstraint::CPair WeightConstraint::create(Solver& s, Literal W, WeightLit
 
 WeightConstraint* WeightConstraint::doCreate(Solver& s, Literal W, WeightLitsRep& rep, uint32 flags) {
 	WeightConstraint* conflict = (WeightConstraint*)0x1;
+	const uint32 onlyOne = create_only_btb|create_only_bfb;
+	uint32 act  = 3u;
+	if ((flags & onlyOne) && (flags & onlyOne) != onlyOne) {
+		act = (flags & create_only_bfb) != 0u;
+	}
 	bool addSat = (flags&create_sat) != 0 && rep.size;
+	s.acquireProblemVar(W.var());
 	if (!rep.propagate(s, W))                 { return conflict; }
 	if (rep.unsat() || (rep.sat() && !addSat)){ return 0; }
-	if ((rep.bound == 1 || rep.bound == rep.reach) && (flags & create_explicit) == 0) {
+	if ((rep.bound == 1 || rep.bound == rep.reach) && (flags & create_explicit) == 0 && act == 3u) {
 		LitVec clause; clause.reserve(1 + rep.size);
 		Literal bin[2];
 		bool disj = rep.bound == 1; // con == disjunction or con == conjunction
@@ -212,11 +222,6 @@ WeightConstraint* WeightConstraint::doCreate(Solver& s, Literal W, WeightLitsRep
 		return (sat || ClauseCreator::create(s, clause, 0)) ? 0 : conflict;
 	}
 	assert(rep.open() || (rep.sat() && addSat));
-	uint32 act  = 3u;
-	if (flags & (create_only_btb|create_only_bfb)) {
-		act  = ((flags & (create_only_btb|create_only_bfb)) / create_only_btb) - 1u;
-		act += (act == 2u);
-	}
 	if (!s.sharedContext()->physicalShareProblem()) { flags |= create_no_share; }
 	if (s.sharedContext()->frozen())                { flags |= (create_no_freeze|create_no_share); }
 	bool   hasW = rep.hasWeights();
@@ -304,7 +309,7 @@ WeightConstraint::WeightConstraint(Solver& s, const WeightConstraint& other) {
 	bound_[1]	   = other.bound_[1];
 	active_      = other.active_;
 	watched_     = other.watched_;
-	if (active_ == NOT_ACTIVE && s.value(heu->var()) == value_free) {
+	if (s.value(heu->var()) == value_free) {
 		addWatch(s, 0, FTB_BFB);  // watch con in both phases
 		addWatch(s, 0, FFB_BTB);  // in order to allow for backpropagation
 	}

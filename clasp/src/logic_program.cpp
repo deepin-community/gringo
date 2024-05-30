@@ -220,10 +220,11 @@ void LogicProgram::dispose(bool force) {
 	if (theory_) {
 		theory_->reset();
 	}
-	if (force || !incData_) {
+	if (force) {
 		deleteAtoms(0);
 		AtomList().swap(atoms_);
 		AtomState().swap(atomState_);
+		LpLitVec().swap(assume_);
 		delete theory_;
 		delete incData_;
 		VarVec().swap(propQ_);
@@ -274,6 +275,7 @@ bool LogicProgram::doUpdateProgram() {
 	dispose(false);
 	setFrozen(false);
 	auxData_ = new Aux();
+	assume_.clear();
 	if (theory_) { theory_->update(); }
 	incData_->unfreeze.clear();
 	input_.hi = std::min(input_.hi, endAtom());
@@ -482,8 +484,8 @@ void LogicProgram::accept(Potassco::AbstractProgram& out) {
 		out.project(auxData_->project.back() ? Potassco::toSpan(auxData_->project) : Potassco::toSpan<Atom_t>());
 	}
 	// visit assumptions
-	if (!auxData_->assume.empty()) {
-		out.assume(Potassco::toSpan(auxData_->assume));
+	if (!assume_.empty()) {
+		out.assume(Potassco::toSpan(assume_));
 	}
 	// visit heuristics
 	if (!auxData_->dom.empty()) {
@@ -647,7 +649,7 @@ bool LogicProgram::supportsSmodels() const {
 	if (incData_ || theory_)        { return false; }
 	if (!auxData_->dom.empty())     { return false; }
 	if (!auxData_->acyc.empty())    { return false; }
-	if (!auxData_->assume.empty())  { return false; }
+	if (!assume_.empty())           { return false; }
 	if (!auxData_->project.empty()) { return false; }
 	for (ShowVec::const_iterator it = show_.begin(), end = show_.end(); it != end; ++it) {
 		Potassco::Lit_t lit = Potassco::lit(it->first);
@@ -678,7 +680,7 @@ bool LogicProgram::inProgram(Atom_t id) const {
 	return false;
 }
 LogicProgram& LogicProgram::addAssumption(const Potassco::LitSpan& lits) {
-	auxData_->assume.insert(auxData_->assume.end(), Potassco::begin(lits), Potassco::end(lits));
+	assume_.insert(assume_.end(), Potassco::begin(lits), Potassco::end(lits));
 	return *this;
 }
 
@@ -738,11 +740,14 @@ LogicProgram& LogicProgram::addRule(const Rule& rule) {
 			}
 		}
 	}
-	else if (statsId_ == 0) {
+	if (statsId_ == 0) {
+		// Assume all (new) heads are initially in "upper" closure.
 		for (Potassco::AtomSpan::iterator it = Potassco::begin(rule.head), end = Potassco::end(rule.head); it != end; ++it) {
-			if (!validAtom(*it) || (isNew(*it) && getAtom(*it)->supports() == 0)) {
+			if (!isNew(*it)) continue;
+			if (validAtom(*it))
+				getAtom(*it)->setInUpper(true);
+			else
 				auxData_->skippedHeads.insert(*it);
-			}
 		}
 	}
 	rule_.clear();
@@ -826,9 +831,40 @@ void LogicProgram::doGetAssumptions(LitVec& out) const {
 		Literal lit = getRootAtom(*it)->assumption();
 		if (lit != lit_true()) { out.push_back( lit ); }
 	}
-	for (Potassco::LitVec::const_iterator it = auxData_->assume.begin(), end = auxData_->assume.end(); it != end; ++it) {
+	for (Potassco::LitVec::const_iterator it = assume_.begin(), end = assume_.end(); it != end; ++it) {
 		out.push_back(getLiteral(Potassco::id(*it)));
 	}
+}
+bool LogicProgram::extractCore(const LitVec& solverCore, Potassco::LitVec& prgLits) const 	{
+	uint32 marked = 0;
+	prgLits.clear();
+	for (LitVec::const_iterator it = solverCore.begin(); it != solverCore.end(); ++it) {
+		if (!ctx()->validVar(it->var())) { break; }
+		ctx()->mark(*it);
+		++marked;
+	}
+	if (marked == solverCore.size()) {
+		for (VarVec::const_iterator it = frozen_.begin(), end = frozen_.end(); it != end && marked; ++it) {
+			PrgAtom* atom = getRootAtom(*it);
+			Literal lit = atom->assumption();
+			if (lit == lit_true() || !ctx()->marked(lit)) continue;
+			prgLits.push_back(atom->literal() == lit ? Potassco::lit(*it) : Potassco::neg(*it));
+			ctx()->unmark(lit);
+			--marked;
+		}
+		for (Potassco::LitVec::const_iterator it = assume_.begin(), end = assume_.end(); it != end && marked; ++it) {
+			Literal lit = getLiteral(Potassco::id(*it));
+			if (!ctx()->marked(lit)) continue;
+			prgLits.push_back(*it);
+			ctx()->unmark(lit);
+			--marked;
+		}
+	}
+	for (LitVec::const_iterator it = solverCore.begin(); it != solverCore.end(); ++it) {
+		if (ctx()->validVar(it->var()))
+			ctx()->unmark(it->var());
+	}
+	return prgLits.size() == solverCore.size();
 }
 /////////////////////////////////////////////////////////////////////////////////////////
 // Program definition - private
@@ -1089,8 +1125,14 @@ void LogicProgram::prepareProgram(bool checkSccs) {
 	prepareExternals();
 	// Given that freezeTheory() might introduce otherwise
 	// unused atoms, it must be called before we fix the
-	// number of input atoms.
+	// number of input atoms. It must also be called before resetting
+	// the initial "upper" closure so that we can correctly classify
+	// theory atoms.
 	freezeTheory();
+	// Prepare for preprocessing by resetting our "upper" closure.
+	for (uint32 i = startAtom(); i != endAtom(); ++i) {
+		getAtom(i)->setInUpper(false);
+	}
 	uint32 nAtoms = (input_.hi = std::min(input_.hi, endAtom()));
 	stats.auxAtoms += endAtom() - nAtoms;
 	for (uint32 i = 0; i != RuleStats::numKeys(); ++i) {
@@ -1177,7 +1219,8 @@ void LogicProgram::freezeTheory() {
 			const Potassco::TheoryAtom& a = **it;
 			if (isFact(a.atom()) || !isNew(a.atom())) { continue; }
 			PrgAtom* atom = resize(a.atom());
-			if (!atom->frozen() && atom->supports() == 0 && atom->relevant() && skippedHeads.count(a.atom()) == 0) {
+			bool inUpper  = atom->inUpper() || skippedHeads.count(a.atom()) != 0;
+			if (!atom->frozen() && atom->supports() == 0 && atom->relevant() && !inUpper) {
 				pushFrozen(atom, value_free);
 			}
 		}
@@ -1248,10 +1291,9 @@ void LogicProgram::finalizeDisjunctions(Preprocessor& p, uint32 numSccs) {
 	uint32 shifted = 0;
 	stats.nonHcfs  = uint32(nonHcfs_.size());
 	Literal bot    = lit_false();
-	DlpTr tr(this, PrgEdge::Gamma);
-	RuleTransform shifter(tr);
 	Potassco::LitVec rb;
 	VarVec rh;
+	DlpTr tr(this, PrgEdge::Gamma);
 	for (uint32 id = 0, maxId = sizeVec(disj); id != maxId; ++id) {
 		PrgDisj* d = disj[id];
 		Literal dx = d->inUpper() ? d->literal() : bot;
@@ -1288,6 +1330,7 @@ void LogicProgram::finalizeDisjunctions(Preprocessor& p, uint32 numSccs) {
 		// create shortcut for supports to avoid duplications during shifting
 		Literal supportLit = dx != bot ? getEqAtomLit(dx, supports, p, sccMap) : dx;
 		// create shifted rules and split disjunctions into non-hcf components
+		RuleTransform shifter(tr);
 		for (VarVec::iterator hIt = head.begin(), hEnd = head.end(); hIt != hEnd; ++hIt) {
 			uint32 scc = getAtom(*hIt)->scc();
 			if (scc == PrgNode::noScc || (sccMap[scc] & seen_scc) != 0) {
@@ -1324,7 +1367,6 @@ void LogicProgram::finalizeDisjunctions(Preprocessor& p, uint32 numSccs) {
 						nonHcfs_.add(scc);
 					}
 					if (!options().noGamma) {
-						tr.scc = scc;
 						shifter.transform(sr, Potassco::size(sr.cond) < 4 ? RuleTransform::strategy_no_aux : RuleTransform::strategy_default);
 					}
 					else {
@@ -1423,7 +1465,7 @@ void LogicProgram::freezeAssumptions() {
 	for (VarVec::const_iterator it = frozen_.begin(), end = frozen_.end(); it != end; ++it) {
 		ctx()->setFrozen(getRootAtom(*it)->var(), true);
 	}
-	for (Potassco::LitVec::const_iterator it = auxData_->assume.begin(), end = auxData_->assume.end(); it != end; ++it) {
+	for (Potassco::LitVec::const_iterator it = assume_.begin(), end = assume_.end(); it != end; ++it) {
 		ctx()->setFrozen(getLiteral(Potassco::id(*it)).var(), true);
 	}
 }
@@ -1784,7 +1826,10 @@ Literal LogicProgram::getEqAtomLit(Literal lit, const BodyList& supports, Prepro
 	else if (supports.size() == 1 && supports[0]->size() < 2 && supports.back()->literal() == lit) {
 		return supports[0]->size() == 0 ? lit_true() : supports[0]->goal(0);
 	}
-	else if (p.getRootAtom(lit) != varMax) {
+	else if (p.getRootAtom(lit) != varMax && opts_.noSCC) {
+		// Use existing root atom only if scc checking is disabled.
+		// Otherwise, we would have to recheck SCCs from that atom again because
+		// adding a new edge could create a new or change an existing SCC.
 		return posLit(p.getRootAtom(lit));
 	}
 	incTrAux(1);
@@ -1793,7 +1838,8 @@ Literal LogicProgram::getEqAtomLit(Literal lit, const BodyList& supports, Prepro
 	uint32 scc   = PrgNode::noScc;
 	aux->setLiteral(lit);
 	aux->setSeen(true);
-	p.setRootAtom(aux->literal(), auxV);
+	if (p.getRootAtom(lit) == varMax)
+		p.setRootAtom(aux->literal(), auxV);
 	for (BodyList::const_iterator sIt = supports.begin(); sIt != supports.end(); ++sIt) {
 		PrgBody* b = *sIt;
 		if (b->relevant() && b->value() != value_false) {

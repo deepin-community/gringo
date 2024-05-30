@@ -162,8 +162,33 @@ void Reifier::project(const AtomSpan& atoms) {
     for (auto &x : atoms) { printStepFact("project", x); }
 }
 
+namespace {
+
+size_t csp_offset(const StringSpan& str) {
+    auto pos = str.size;
+    for (; pos > 0 && str[pos - 1] >= '0' && str[pos - 1] <= '9'; --pos) { }
+    if (pos == str.size) {
+        return str.size;
+    }
+    if (pos > 1 && str[pos - 1] == '-') {
+        --pos;
+    }
+    if (pos > 1 && str[pos - 1] == '=') {
+        return pos - 1;
+    }
+    return str.size;
+}
+
+}
+
 void Reifier::output(const StringSpan& str, const LitSpan& condition) {
-    printStepFact("output", str, litTuple(condition));
+    auto pos = csp_offset(str);
+    if (pos == str.size) {
+        printStepFact("output", str, litTuple(condition));
+    }
+    else {
+        printStepFact("output_csp", StringSpan{str.first, pos}, StringSpan{str.first + pos + 1, str.size - pos - 1}, litTuple(condition));
+    }
 }
 
 void Reifier::external(Atom_t a, Value_t v) {
@@ -225,7 +250,9 @@ void Reifier::theoryTerm(Id_t termId, int cId, IdSpan const &args) {
 }
 
 void Reifier::theoryElement(Id_t elementId, IdSpan const &terms, const LitSpan& cond) {
-    printStepFact("theory_element", elementId, theoryTuple(terms), litTuple(cond));
+    auto tt = theoryTuple(terms);
+    auto lt = litTuple(cond);
+    printStepFact("theory_element", elementId, tt, lt);
 }
 
 void Reifier::theoryAtom(Id_t atomOrZero, Id_t termId, IdSpan const &elements) {

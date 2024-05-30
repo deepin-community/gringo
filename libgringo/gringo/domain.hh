@@ -22,14 +22,16 @@
 
 // }}}
 
-#ifndef _GRINGO_DOMAIN_HH
-#define _GRINGO_DOMAIN_HH
+#ifndef GRINGO_DOMAIN_HH
+#define GRINGO_DOMAIN_HH
 
+#include <algorithm>
 #include <cassert>
 #include <gringo/base.hh>
 #include <gringo/types.hh>
 #include <deque>
 #include <gringo/hash_set.hh>
+#include <stdexcept>
 
 namespace Gringo {
 
@@ -52,11 +54,16 @@ inline std::ostream &operator<<(std::ostream &out, BinderType x) {
 
 class IndexUpdater {
 public:
+    IndexUpdater() = default;
+    IndexUpdater(IndexUpdater const &other) = default;
+    IndexUpdater(IndexUpdater &&other) noexcept = default;
+    IndexUpdater &operator=(IndexUpdater const &other) = default;
+    IndexUpdater &operator=(IndexUpdater &&other) noexcept = default;
+    virtual ~IndexUpdater() noexcept = default;
     // Updates the index with fresh atoms from the domain.
     // First traverses the atoms in the domain skipping undefined atoms and
     // afterwards traversing undefined atoms that have been defined later.
     virtual bool update() = 0;
-    virtual ~IndexUpdater() { }
 };
 
 using SValVec = std::vector<Term::SVal>;
@@ -67,72 +74,110 @@ using SValVec = std::vector<Term::SVal>;
 template <class Domain>
 class BindIndexEntry {
 public:
-    struct Hash {
-        size_t operator()(BindIndexEntry const &e) const { return e.hash(); };
-        size_t operator()(SymVec const &e) const { return hash_range(e.begin(), e.end()); };
-    };
+    // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     using SizeType  = typename Domain::SizeType;
-    using DataVec = std::vector<uint64_t>;
-    BindIndexEntry(SymVec const &bound)
-    : end_(0)
-    , reserved_(1)
-    , data_(nullptr)
-    , begin_(nullptr) {
-        data_ = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * bound.size() + sizeof(SizeType)));
-        if (!data_) { throw std::bad_alloc(); }
-        begin_ = reinterpret_cast<SizeType*>(data_ + bound.size());
+    BindIndexEntry(SymVec const &bound) {
+        // NOLINTNEXTLINE
+        data_ = static_cast<uint64_t*>(malloc(sizeof(uint64_t) * bound.size() + sizeof(SizeType)));
+        if (data_ == nullptr) {
+            throw std::bad_alloc();
+        }
+        begin_ = asSize_(bound.size());
         uint64_t *it = data_;
-        for (auto &sym : bound) { *it++ = sym.rep(); }
+        for (auto const &sym : bound) {
+            *it++ = sym.rep();
+        }
     }
-    BindIndexEntry(BindIndexEntry const &) = delete;
-    BindIndexEntry(BindIndexEntry &&e)
-    : end_(0)
-    , reserved_(0)
-    , data_(nullptr)
-    , begin_(nullptr) { *this = std::move(e); }
-    BindIndexEntry &operator=(BindIndexEntry const &) = delete;
-    BindIndexEntry &operator=(BindIndexEntry &&e) {
-        std::swap(data_, e.data_);
-        std::swap(begin_, e.begin_);
-        std::swap(end_, e.end_);
-        std::swap(reserved_, e.reserved_);
+    BindIndexEntry(BindIndexEntry const &other) = delete;
+    BindIndexEntry(BindIndexEntry &&other) noexcept {
+        *this = std::move(other);
+    }
+    BindIndexEntry &operator=(BindIndexEntry const &other) = delete;
+    BindIndexEntry &operator=(BindIndexEntry &&other) noexcept {
+        std::swap(data_, other.data_);
+        std::swap(begin_, other.begin_);
+        std::swap(end_, other.end_);
+        std::swap(reserved_, other.reserved_);
         return *this;
     }
-    ~BindIndexEntry() { free(data_); }
-    SizeType const *begin() const { return begin_; }
-    SizeType const *end() const { return begin_ + end_; }
+    ~BindIndexEntry() {
+        // NOLINTNEXTLINE
+        free(data_);
+    }
+    SizeType const *begin() const {
+        return begin_;
+    }
+    SizeType const *end() const {
+        return begin_ + end_;
+    }
     void push(SizeType x) {
         assert(reserved_ > 0 && end_ <= reserved_);
         if (end_ == reserved_) {
-            size_t bound = reinterpret_cast<uint64_t const*>(begin_) - data_;
+            size_t bound = asUint64_() - data_;
             size_t oldsize = sizeof(uint64_t) * bound + sizeof(SizeType) * end_;
             size_t size = oldsize + sizeof(SizeType) * end_;
-            if (size < oldsize) { throw std::runtime_error("size limit exceeded"); }
-            uint64_t *ret = reinterpret_cast<uint64_t*>(realloc(data_, size));
-            if (!ret) { throw std::bad_alloc(); }
+            if (size < oldsize) {
+                throw std::runtime_error("size limit exceeded");
+            }
+            // NOLINTNEXTLINE
+            auto *ret = static_cast<uint64_t*>(realloc(data_, size));
+            if (ret == nullptr) {
+                throw std::bad_alloc();
+            }
             reserved_ = 2 * end_;
             if (data_ != ret) {
                 data_ = ret;
-                begin_ = reinterpret_cast<SizeType*>(data_ + bound);
+                begin_ = asSize_(bound);
             }
         }
         begin_[end_++] = x;
     }
     size_t hash() const {
-        return hash_range(data_, reinterpret_cast<uint64_t *>(begin_));
+        return hash_range(data_, asUint64_());
     }
-    bool operator==(BindIndexEntry const &x) const {
-        return std::equal(x.data_, reinterpret_cast<uint64_t const *>(x.begin_), data_, [](uint64_t a, uint64_t b) { return a == b; });
+    friend bool operator==(BindIndexEntry const &x, BindIndexEntry const &y) {
+        return std::equal(x.data_, x.asUint64_(), y.data_, [](uint64_t a, uint64_t b) { return a == b; });
     }
-    bool operator==(SymVec const &vec) const {
-        return std::equal(vec.begin(), vec.end(), data_, [](Symbol const &a, uint64_t b) { return a.rep() == b; });
+    friend bool operator==(BindIndexEntry const &x, SymVec const &y) {
+        return std::equal(y.begin(), y.end(), x.data_, [](Symbol const &a, uint64_t b) { return a.rep() == b; });
+    }
+    friend bool operator==(SymVec const &x, BindIndexEntry const &y) {
+        return y == x;
     }
 private:
-    Id_t end_;
-    Id_t reserved_;
-    uint64_t* data_;
-    SizeType* begin_;
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
+    uint64_t *asUint64_() const {
+        return reinterpret_cast<uint64_t *>(begin_);
+    }
+    SizeType *asSize_(size_t offset) const {
+        return reinterpret_cast<SizeType *>(data_ + offset);
+    }
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+    // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+    Id_t end_{0};
+    Id_t reserved_{1};
+    uint64_t* data_{nullptr};
+    SizeType* begin_{nullptr};
 };
+
+} // namespace Gringo
+
+namespace std {
+
+template <class Domain>
+struct hash<Gringo::BindIndexEntry<Domain>> {
+    size_t operator()(Gringo::BindIndexEntry<Domain> const &entry) const {
+        return entry.hash();
+    }
+    size_t operator()(Gringo::SymVec const &e) const {
+        return hash_range(e.begin(), e.end());
+    };
+};
+
+} // namespace std
+
+namespace Gringo {
 
 // An index for a positive literal occurrence
 // with at least one variable bound and one variable unbound.
@@ -143,7 +188,7 @@ public:
     using OffsetVec = std::vector<SizeType>;
     using Iterator  = SizeType const *;
     using Entry     = BindIndexEntry<Domain>;
-    using Index     = UniqueVec<Entry, typename Entry::Hash, EqualTo>;
+    using Index     = ordered_set<Entry>;
 
     struct OffsetRange {
         bool next(Id_t &offset, Term const &repr, BindIndex &idx) {
@@ -164,13 +209,19 @@ public:
     , bound_(std::move(bound)) {
         assert(!bound_.empty());
     }
+    BindIndex(BindIndex const &other) = default;
+    BindIndex(BindIndex &&other) noexcept = default;
+    BindIndex &operator=(BindIndex const &other) = default;
+    BindIndex &operator=(BindIndex &&other) noexcept = default;
+    ~BindIndex() noexcept override = default;
 
     bool update() override {
         return domain_.update([this](SizeType offset) { add(offset); }, *repr_, imported_, importedDelayed_);
     }
 
     // Returns a range of offsets corresponding to atoms that match the given bound variables.
-    OffsetRange lookup(SValVec const &bound, BinderType type, Logger &) {
+    OffsetRange lookup(SValVec const &bound, BinderType type, Logger &log) {
+        static_cast<void>(log);
         boundVals_.clear();
         for (auto &&x : bound) { boundVals_.emplace_back(*x); }
         auto it(data_.find(boundVals_));
@@ -194,19 +245,16 @@ public:
         return repr_->hash();
     }
 
-    virtual ~BindIndex() noexcept = default;
-
 private:
     // Adds an atom given by its offset to the index.
     // Assumes that the atom matches and has not been added previously.
     void add(Id_t offset) {
         boundVals_.clear();
         for (auto &y : bound_) { boundVals_.emplace_back(*y); }
-        auto jt = data_.findPush(boundVals_, boundVals_).first;
-        jt->push(offset);
+        auto jt = data_.insert(boundVals_).first;
+        const_cast<Entry &>(*jt).push(offset);
     }
 
-private:
     UTerm const repr_;
     Domain     &domain_;
     SValVec     bound_;
@@ -215,6 +263,21 @@ private:
     Id_t        imported_ = 0;
     Id_t        importedDelayed_ = 0;
 };
+
+} // namespace Gringo
+
+namespace std {
+
+template <class Domain>
+struct hash<Gringo::BindIndex<Domain>> {
+    size_t operator()(Gringo::BindIndex<Domain> const &entry) const {
+        return entry.hash();
+    }
+};
+
+} // namespace std
+
+namespace Gringo {
 
 // }}}
 // {{{ declaration of FullIndex
@@ -287,8 +350,15 @@ public:
     , imported_(imported)
     , initialImport_(imported) { }
 
+    FullIndex(FullIndex const &other) = default;
+    FullIndex(FullIndex &&other) noexcept = default;
+    FullIndex &operator=(FullIndex const &other) = default;
+    FullIndex &operator=(FullIndex &&other) noexcept = default;
+    ~FullIndex() noexcept override = default;
+
     // Returns a range of offsets corresponding to matching atoms.
-    OffsetRange lookup(BinderType type, Logger &) {
+    OffsetRange lookup(BinderType type, Logger &log) {
+        static_cast<void>(log);
         switch (type) {
             case BinderType::OLD:
             case BinderType::ALL: { return { type, 0, !index_.empty() ? index_.front().first : 0 }; }
@@ -309,8 +379,6 @@ public:
         return get_value_hash(repr_, initialImport_);
     }
 
-    virtual ~FullIndex() noexcept = default;
-
 private:
     // Adds an atom offset to the index.
     // The offset is merged into the last interval if possible.
@@ -324,7 +392,6 @@ private:
         }
     }
 
-private:
     UTerm       repr_;
     Domain     &domain_;
     IntervalVec index_;
@@ -333,11 +400,31 @@ private:
     Id_t        initialImport_;
 };
 
+} // namespace Gringo
+
+namespace std {
+
+template <class Domain>
+struct hash<Gringo::FullIndex<Domain>> {
+    size_t operator()(Gringo::FullIndex<Domain> const &entry) const { return entry.hash(); }
+};
+
+} // namespace std
+
+namespace Gringo {
+
 // }}}
 // {{{ declaration of Domain
 
 class Domain {
 public:
+    Domain() = default;
+    Domain(Domain const &other) = default;
+    Domain(Domain &&other) noexcept = default;
+    Domain &operator=(Domain const &other) = default;
+    Domain &operator=(Domain &&other) noexcept = default;
+    virtual ~Domain() noexcept = default;
+
     virtual void init() = 0;
     virtual void enqueue() = 0;
     virtual bool dequeue() = 0;
@@ -347,8 +434,6 @@ public:
     virtual void nextGeneration() = 0;
     virtual void setDomainOffset(Id_t offset) = 0;
     virtual Id_t domainOffset() const = 0;
-
-    virtual ~Domain() { }
 };
 using UDom = std::unique_ptr<Domain>;
 using UDomVec = std::vector<UDom>;
@@ -360,24 +445,29 @@ template <class T>
 class AbstractDomain : public Domain {
 public:
     using Atom            = T;
-    using Atoms           = UniqueVec<Atom, HashKey<Symbol>, EqualToKey<Symbol>>;
+    // TODO: this should be refactored to use an ordered_map instead
+    using Atoms           = ordered_set<Atom, HashKey<Symbol, Cast<Symbol>, mix_value_hash<Symbol>>, EqualToKey<Symbol>>;
     using BindIndex       = Gringo::BindIndex<AbstractDomain>;
     using FullIndex       = Gringo::FullIndex<AbstractDomain>;
-    using BindIndices     = std::unordered_set<BindIndex, call_hash<BindIndex>>;
-    using FullIndices     = std::unordered_set<FullIndex, call_hash<FullIndex>>;
-    using AtomVec         = typename Atoms::Vec;
+    using BindIndices     = std::unordered_set<BindIndex, mix_value_hash<BindIndex>>;
+    using FullIndices     = std::unordered_set<FullIndex, mix_value_hash<FullIndex>>;
+    using AtomVec         = typename Atoms::values_container_type;
     using Iterator        = typename AtomVec::iterator;
     using ConstIterator   = typename AtomVec::const_iterator;
-    using SizeType        = typename Atoms::SizeType;
+    using SizeType        = uint32_t;
     using OffsetVec       = std::vector<SizeType>;
 
     AbstractDomain() = default;
-    AbstractDomain(AbstractDomain const &) = delete;
-    AbstractDomain(AbstractDomain &&) = delete;
+    AbstractDomain(AbstractDomain const &other) = delete;
+    AbstractDomain(AbstractDomain &&other) noexcept = delete;
+    AbstractDomain &operator=(AbstractDomain const &other) = delete;
+    AbstractDomain &operator=(AbstractDomain &&other) noexcept = delete;
+    ~AbstractDomain() noexcept override = default;
 
     // All indices that use a domain have to be registered with it.
     BindIndex &add(SValVec &&bound, UTerm &&repr) {
         auto ret(indices_.emplace(*this, std::move(bound), std::move(repr)));
+        // NOLINTNEXTLINE
         auto &idx = const_cast<BindIndex&>(*ret.first);
         idx.update();
         return idx;
@@ -385,6 +475,7 @@ public:
 
     FullIndex &add(UTerm &&repr, Id_t imported) {
         auto ret(fullIndices_.emplace(*this, std::move(repr), imported));
+        // NOLINTNEXTLINE
         auto &idx = const_cast<FullIndex&>(*ret.first);
         idx.update();
         return idx;
@@ -398,7 +489,7 @@ public:
                 // Note: intended for non-recursive case only
                 auto it = atoms_.find(repr.eval(undefined, log));
                 if (!undefined && it != atoms_.end() && it->defined()) {
-                    offset = static_cast<SizeType>(it - begin());
+                    offset = static_cast<SizeType>(it - atoms_.begin());
                     return true;
                 }
                 break;
@@ -407,7 +498,7 @@ public:
                 auto it = atoms_.find(repr.eval(undefined, log));
                 if (!undefined && it != atoms_.end()) {
                     if (!it->fact()) {
-                        offset = static_cast<SizeType>(it - begin());
+                        offset = static_cast<SizeType>(it - atoms_.begin());
                         return true;
                     }
                 }
@@ -450,21 +541,21 @@ public:
             switch (type) {
                 case BinderType::OLD: {
                     if (it->generation() <  generation_) {
-                        offset = static_cast<SizeType>(it - begin());
+                        offset = static_cast<SizeType>(it - atoms_.begin());
                         return true;
                     }
                     break;
                 }
                 case BinderType::ALL: {
                     if (it->generation() <=  generation_) {
-                        offset = static_cast<SizeType>(it - begin());
+                        offset = static_cast<SizeType>(it - atoms_.begin());
                         return true;
                     }
                     break;
                 }
                 case BinderType::NEW: {
                     if (it->generation() == generation_) {
-                        offset = static_cast<SizeType>(it - begin());
+                        offset = static_cast<SizeType>(it - atoms_.begin());
                         return true;
                     }
                     break;
@@ -477,7 +568,7 @@ public:
 
     // Loops over all atoms that might have to be imported into an index.
     // Already seen atoms are indicated with the two offset parameters.
-    // Returns true if a maching atom was falls.
+    // Returns true if a maching atom was false.
     // Furthermore, accepts a callback f that receives the offset of a matching atom.
     // If the callback returns false the search for matching atoms is stopped and the function returns true.
     template <typename F>
@@ -490,7 +581,9 @@ public:
                     f(imported);
                 }
             }
-            else { it->markDelayed(); }
+            else {
+                const_cast<Atom&>(*it).markDelayed();
+            }
         }
         for (auto it(delayed_.begin() + importedDelayed), ie(delayed_.end()); it < ie; ++it) {
             auto &atom = operator[](*it);
@@ -499,8 +592,19 @@ public:
                 f(*it);
             }
         }
+        choiceIndex_ = 0;
         importedDelayed = static_cast<SizeType>(delayed_.size());
         return ret;
+    }
+
+    // Return true if there is an atom that is not a fact in the domain.
+    bool hasChoice() const {
+        for (auto it = atoms_.begin() + choiceIndex_, ie = atoms_.end(); it != ie; ++it, ++choiceIndex_) {
+            if (!it->fact() && it->defined()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     bool empty() const {
@@ -518,27 +622,39 @@ public:
         fullIndices_.clear();
     }
 
+    std::vector<Atom> &container() {
+        return const_cast<AtomVec&>(atoms_.values_container());
+    }
+    std::vector<Atom> const &container() const {
+        return atoms_.values_container();
+    }
+
+
     // Returns the current generation.
     // The generation corresponds to the number of grounding iterations
     // the domain was involved in.
     SizeType generation() const { return generation_; }
     // Resevers an atom for a recursive negative literal.
     // This does not set a generation.
-    Iterator reserve(Symbol x) { return atoms_.findPush(x, x).first; }
+    Iterator reserve(Symbol x) {
+        return convert_(atoms_.insert(x).first);
+    }
     // Defines (adds) an atom setting its generation.
     std::pair<Iterator, bool> define(Symbol value) {
-        auto ret = atoms_.findPush(value, value);
+        auto ret = atoms_.insert(value);
+        auto offset = numeric_cast<typename OffsetVec::value_type>(ret.first - atoms_.begin());
+        auto it = begin() + offset;
         if (ret.second) {
-            ret.first->setGeneration(generation() + 1);
+            it->setGeneration(generation() + 1);
         }
         else if (!ret.first->defined()) {
             ret.second = true;
-            ret.first->setGeneration(generation() + 1);
+            it->setGeneration(generation() + 1);
             if (ret.first->delayed()) {
-                delayed_.emplace_back(numeric_cast<typename OffsetVec::value_type>(ret.first - begin()));
+                delayed_.emplace_back(offset);
             }
         }
-        return ret;
+        return {it, ret.second};
     }
     void define(SizeType offset) {
         auto &atm = operator[](offset);
@@ -573,22 +689,70 @@ public:
     bool isEnqueued() const override { return enqueued_ > 0; }
     void nextGeneration() override { ++generation_; }
     OffsetVec &delayed() { return delayed_; }
-    Iterator find(Symbol x) { return atoms_.find(x); }
+    Iterator find(Symbol x) {
+        return convert_(atoms_.find(x));
+    }
     ConstIterator find(Symbol x) const { return atoms_.find(x); }
     Id_t size() const { return atoms_.size(); }
-    Iterator begin() { return atoms_.begin(); }
-    Iterator end() { return atoms_.end(); }
-    ConstIterator begin() const { return atoms_.begin(); }
-    ConstIterator end() const { return atoms_.end(); }
-    Atom &operator[](Id_t x) { return atoms_[x]; }
-    void setDomainOffset(Id_t offset) override { domainOffset_ = offset; }
-    Id_t domainOffset() const override { return domainOffset_; }
+    Iterator begin() {
+        return container().begin();
+    }
+    Iterator end() {
+        return container().end();
+    }
+    ConstIterator begin() const {
+        return container().begin();
+    }
+    ConstIterator end() const {
+        return container().end();
+    }
+    Atom &operator[](Id_t x) {
+        return const_cast<Atom &>(*atoms_.nth(x));
+    }
+    void setDomainOffset(Id_t offset) override {
+        domainOffset_ = offset;
+    }
+    Id_t domainOffset() const override {
+        return domainOffset_;
+    }
 
-    virtual ~AbstractDomain() noexcept { }
 protected:
-    void hide(Iterator it) { atoms_.hide(it); }
+    // Assumes that cleanup sets the generation back to 1 and removes delayed
+    // atoms. The given function is simply passed as argument to the erase
+    // function of the vector holding the domain elements.
+    template <class F>
+    void cleanup_(F f) {
+        reset();
+        Id_t offset = 0;
+        Id_t revOffset = atoms_.size();
+        Id_t oldOffset = 0;
+        for (auto it = atoms_.begin(); it != atoms_.end();) {
+            assert(it - atoms_.begin() == offset);
+            if (f(const_cast<Atom&>(*it), oldOffset, offset)) {
+                it = atoms_.unordered_erase(it);
+                --revOffset;
+                oldOffset = revOffset;
+            }
+            else {
+                ++it;
+                ++offset;
+                oldOffset = offset;
+            }
+        }
+        delayed_.clear();
+        generation_ = 1;
+        initOffset_ = atoms_.size();
+        initDelayedOffset_ = 0;
+    }
 
-protected:
+private:
+    ConstIterator convert_(typename Atoms::const_iterator it) {
+        return begin() + (it - atoms_.begin());
+    }
+    Iterator convert_(typename Atoms::iterator it) {
+        return begin() + (it - atoms_.begin());
+    }
+
     BindIndices indices_;
     FullIndices fullIndices_;
     Atoms       atoms_;
@@ -598,12 +762,11 @@ protected:
     Id_t        initOffset_ = 0;
     Id_t        initDelayedOffset_ = 0;
     Id_t        domainOffset_ = InvalidId;
+    Id_t mutable choiceIndex_ = 0;
 };
 
 // }}}
 
 } // namespace Gringo
 
-#endif // _GRINGO_DOMAIN_HH
-
-
+#endif // GRINGO_DOMAIN_HH

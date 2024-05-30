@@ -145,10 +145,16 @@ public:
 	const SolveLimits&  limits()     const { return limits_; }
 	virtual bool        interrupted()const = 0;
 	const Model&        model()      const;
+	const LitVec*       unsatCore()  const;
 
 	void setEnumerator(Enumerator& e);
 	void setEnumLimit(uint64 m)          { enumLimit_= m;  }
 	void setLimits(const SolveLimits& x) { limits_   = x;  }
+	//! If set to false, SharedContext::report() is not called for models.
+	/*!
+	 * \note The default is true, i.e. models are reported via SharedContext::report().
+	 */
+	void setReportModels(bool report)    { reportM_ = report;  }
 
 	//! Runs the solve algorithm.
 	/*!
@@ -218,6 +224,7 @@ protected:
 	virtual void    doStart(SharedContext& ctx, const LitVec& assume);
 	virtual int     doNext(int last);
 	virtual void    doStop();
+	virtual void    doDetach() = 0;
 
 	bool            reportModel(Solver& s) const;
 	bool            reportUnsat(Solver& s) const;
@@ -229,6 +236,7 @@ protected:
 private:
 	typedef SingleOwnerPtr<Enumerator>   EnumPtr;
 	typedef SingleOwnerPtr<const LitVec> PathPtr;
+	typedef SingleOwnerPtr<LitVec>       CorePtr;
 	enum { value_stop = value_false|value_true };
 	bool attach(SharedContext& ctx, ModelHandler* onModel);
 	void detach();
@@ -237,9 +245,11 @@ private:
 	EnumPtr        enum_;
 	ModelHandler*  onModel_;
 	PathPtr        path_;
+	CorePtr        core_;
 	uint64         enumLimit_;
 	double         time_;
 	int            last_;
+	bool           reportM_;
 };
 //! A class that implements clasp's sequential solving algorithm.
 class SequentialSolve : public SolveAlgorithm {
@@ -254,6 +264,7 @@ protected:
 	virtual void doStart(SharedContext& ctx, const LitVec& assume);
 	virtual int  doNext(int last);
 	virtual void doStop();
+	virtual void doDetach();
 private:
 	typedef SingleOwnerPtr<BasicSolve> SolvePtr;
 	SolvePtr     solve_;

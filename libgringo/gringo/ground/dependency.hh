@@ -22,33 +22,42 @@
 
 // }}}
 
-#ifndef _GRINGO_GROUND_DEPENDENCY_HH
-#define _GRINGO_GROUND_DEPENDENCY_HH
+#ifndef GRINGO_GROUND_DEPENDENCY_HH
+#define GRINGO_GROUND_DEPENDENCY_HH
 
+#include <gringo/utility.hh>
 #include <gringo/graph.hh>
 #include <gringo/term.hh>
 #include <gringo/hash_set.hh>
+#include <iterator>
 
 namespace Gringo { namespace Ground {
 
 // {{{ declaration of Lookup
 
 template <class Occ>
-struct Lookup {
-    typedef std::unordered_multimap<Sig, GTerm*> SigLookup;
-    typedef std::unordered_multimap<GTerm*, Occ, value_hash<GTerm*>, value_equal_to<GTerm*>> Occurrences;
-    typedef typename Occurrences::iterator iterator;
+class Lookup {
+public:
+    using SigLookup = std::unordered_multimap<Sig, GTerm*>;
+    using Occurrences = std::unordered_multimap<GTerm*, Occ, value_hash<GTerm*>, value_equal_to<GTerm*>>;
+    using iterator = typename Occurrences::iterator;
+    using const_iterator = typename Occurrences::const_iterator;
     //! Adds an occurrence associated with a term.
     //! If there is already an occurrence with a structurally equivalent term,
     //! then the method returns true. Otherwise, the method returns false and
     //! the freshly inserted occurrence is associated with the (representative)
     //! term already present.
-    bool add(GTerm &term, Occ &&occ);
+    bool add(GTerm &term, Occ occ);
     template <class Callback>
     void match(Symbol x, Callback const &c);
     template <class Callback>
     void unify(GTerm &x, Callback const &c);
-    ~Lookup();
+    const_iterator begin() const {
+        return occs.begin();
+    }
+    const_iterator end() const {
+        return occs.end();
+    }
 
 private:
     template <class Callback>
@@ -56,7 +65,6 @@ private:
 
     SigLookup terms;
     SigLookup constTerms;
-public:
     Occurrences occs;
 };
 
@@ -64,7 +72,7 @@ public:
 // {{{ declaration of BodyOccurrence
 
 using LocSet = std::set<Location>;
-using SigSet = UniqueVec<Sig>;
+using SigSet = ordered_set<Sig>;
 using UndefVec = std::vector<std::pair<Location, Printable const *>>;
 
 enum class OccurrenceType { POSITIVELY_STRATIFIED, STRATIFIED, UNSTRATIFIED };
@@ -72,6 +80,13 @@ template <class HeadOcc>
 class BodyOccurrence {
 public:
     using DefinedBy = std::vector<std::reference_wrapper<HeadOcc>>;
+    BodyOccurrence() = default;
+    BodyOccurrence(BodyOccurrence const &other) = default;
+    BodyOccurrence(BodyOccurrence &&other) noexcept = default;
+    BodyOccurrence &operator=(BodyOccurrence const &other) = default;
+    BodyOccurrence &operator=(BodyOccurrence &&other) noexcept = default;
+    virtual ~BodyOccurrence() noexcept = default;
+
     virtual UGTerm getRepr() const = 0;
     virtual bool isPositive() const = 0;
     virtual bool isNegative() const = 0;
@@ -79,7 +94,6 @@ public:
     virtual OccurrenceType getType() const = 0;
     virtual DefinedBy &definedBy() = 0;
     virtual void checkDefined(LocSet &done, SigSet const &edb, UndefVec &undef) const = 0;
-    virtual ~BodyOccurrence() { }
 };
 
 // }}}
@@ -89,14 +103,14 @@ template <class Stm, class HeadOcc>
 struct Dependency {
     struct Node;
     using UNode = std::unique_ptr<Node>;
-    typedef std::vector<Node*> NodeVec;
-    typedef std::tuple<BodyOccurrence<HeadOcc>*, NodeVec, bool> Depend;
-    typedef std::pair<Node*, typename NodeVec::size_type> Provide;
-    typedef Ground::Lookup<Provide> Lookup;
-    typedef Graph<Node*> G;
-    typedef std::vector<std::pair<std::vector<Stm>,bool>> ComponentVec;
+    using NodeVec = std::vector<Node*>;
+    using Depend = std::tuple<BodyOccurrence<HeadOcc>*, NodeVec, bool>;
+    using Provide = std::pair<Node*, typename NodeVec::size_type>;
+    using Lookup = Ground::Lookup<Provide>;
+    using G = Graph<Node*>;
+    using ComponentVec = std::vector<std::pair<std::vector<Stm>, bool>>;
     struct Node {
-        Node(Stm &&stm, bool normal) : stm(std::forward<Stm>(stm)), normal(normal) { }
+        Node(Stm stm, bool normal) : stm(std::forward<Stm>(stm)), normal(normal) { }
 
         Stm stm;
         bool normal;
@@ -107,9 +121,9 @@ struct Dependency {
         unsigned posSCC = 0;
     };
 
-    Node &add(Stm &&stm, bool normal);
+    Node &add(Stm stm, bool normal);
     void depends(Node& n, BodyOccurrence<HeadOcc> &occ, bool forceNegative = false);
-    void provides(Node& n, HeadOcc &occ, UGTerm &&term);
+    void provides(Node& n, HeadOcc &occ, UGTerm term);
     std::tuple<ComponentVec, UGTermVec, UGTermVec> analyze();
 
     UGTermVec terms;
@@ -122,18 +136,20 @@ struct Dependency {
 // {{{ definition of Lookup
 
 template <class Occ>
-bool Lookup<Occ>::add(GTerm &term, Occ &&x) {
+bool Lookup<Occ>::add(GTerm &term, Occ occ) {
     auto it = occs.find(&term);
     if (it == occs.end()) {
-        if (term.eval().first) { constTerms.emplace(term.sig(), &term); }
-        else                   { terms.emplace(term.sig(), &term); }
-        occs.emplace(&term, std::forward<Occ>(x));
+        if (term.eval().first) {
+            constTerms.emplace(term.sig(), &term);
+        }
+        else {
+            terms.emplace(term.sig(), &term);
+        }
+        occs.emplace(&term, std::forward<Occ>(occ));
         return true;
     }
-    else {
-        occs.emplace_hint(it, it->first, std::forward<Occ>(x));
-        return false;
-    }
+    occs.emplace_hint(it, it->first, std::forward<Occ>(occ));
+    return false;
 }
 
 template <class Occ>
@@ -151,7 +167,9 @@ void Lookup<Occ>::match(Symbol x, Callback const &c) {
         }
         GValTerm y(x);
         auto rng(occs.equal_range(&y));
-        if (rng.first != rng.second) { c(rng.first, rng.second); }
+        if (rng.first != rng.second) {
+            c(rng.first, rng.second);
+        }
     }
 }
 
@@ -174,21 +192,20 @@ template <class Occ>
 template <class Callback>
 void Lookup<Occ>::unify(GTerm &x, Callback const &c) {
     auto r = x.eval();
-    if (r.first) { match(r.second, c); }
+    if (r.first) {
+        match(r.second, c);
+    }
     else {
         unify(x, terms, c);
         unify(x, constTerms, c);
     }
 }
 
-template <class Occ>
-Lookup<Occ>::~Lookup() { }
-
 // }}}
 // {{{ definition of Dependency
 
 template <class Stm, class HeadOcc>
-typename Dependency<Stm, HeadOcc>::Node &Dependency<Stm, HeadOcc>::add(Stm &&stm, bool normal) {
+typename Dependency<Stm, HeadOcc>::Node &Dependency<Stm, HeadOcc>::add(Stm stm, bool normal) {
     nodes.emplace_back(gringo_make_unique<Node>(std::forward<Stm>(stm), normal));
     return *nodes.back();
 }
@@ -203,7 +220,7 @@ void Dependency<Stm, HeadOcc>::depends(Node& n, BodyOccurrence<HeadOcc> &occ, bo
 }
 
 template <class Stm, class HeadOcc>
-void Dependency<Stm, HeadOcc>::provides(Node& n, HeadOcc& occ, UGTerm &&term) {
+void Dependency<Stm, HeadOcc>::provides(Node& n, HeadOcc& occ, UGTerm term) {
     //std::cerr << *n.stm << " provides   " << *term << std::endl;
     n.provide.emplace_back(&occ, std::move(term));
 }
@@ -225,20 +242,27 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
     }
     // build dependency graph
     G g;
-    for (auto &x : nodes) { x->graphNode = &g.insertNode(x.get()); }
+    for (auto &x : nodes) {
+        x->graphNode = &g.insertNode(x.get());
+    }
     for (auto &x : nodes) {
         for (auto &y : x->depend) {
-            for (auto &z : std::get<1>(y)) { x->graphNode->insertEdge(*z->graphNode); }
+            for (auto &z : std::get<1>(y)) {
+                x->graphNode->insertEdge(*z->graphNode);
+            }
         }
     }
     std::vector<bool> positive;
     ComponentVec components;
-    UniqueVec<UGTerm, value_hash<UGTerm>, value_equal_to<UGTerm>> phead, nhead;
+    ordered_set<UGTerm, mix_value_hash<UGTerm>, value_equal_to<UGTerm>> phead;
+    ordered_set<UGTerm, mix_value_hash<UGTerm>, value_equal_to<UGTerm>> nhead;
     positive.push_back(true);
     for (auto &scc : g.tarjan()) {
         // dependency analysis
-        unsigned negSCC = numeric_cast<unsigned>(positive.size());
-        for (auto &graphNode : scc) { graphNode->data->negSCC = negSCC; }
+        auto negSCC = numeric_cast<unsigned>(positive.size());
+        for (auto &graphNode : scc) {
+            graphNode->data->negSCC = negSCC;
+        }
         positive.push_back(true);
         for (auto &graphNode : scc) {
             positive.back() = positive.back() && graphNode->data->normal;
@@ -250,12 +274,16 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
         }
         // build positive dependency graph
         G gg;
-        for (auto &graphNode : scc) { graphNode->data->graphNode = &gg.insertNode(graphNode->data); }
+        for (auto &graphNode : scc) {
+            graphNode->data->graphNode = &gg.insertNode(graphNode->data);
+        }
         for (auto &graphNode : scc) {
             for (auto &x : graphNode->data->depend) {
                 if (!std::get<0>(x)->isNegative()) {
                     for (auto &y : std::get<1>(x)) {
-                        if (y->negSCC == negSCC) { graphNode->data->graphNode->insertEdge(*y->graphNode); }
+                        if (y->negSCC == negSCC) {
+                            graphNode->data->graphNode->insertEdge(*y->graphNode);
+                        }
                     }
                 }
             }
@@ -264,7 +292,9 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
         auto posSccs(gg.tarjan());
         for (auto &scc : posSccs) {
             // positive dependency analysis
-            for (auto &graphNode : scc) { graphNode->data->posSCC = posSCC; }
+            for (auto &graphNode : scc) {
+                graphNode->data->posSCC = posSCC;
+            }
             posSCC++;
         }
         posSCC = 0;
@@ -275,11 +305,15 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
                     OccurrenceType t = OccurrenceType::POSITIVELY_STRATIFIED;
                     for (auto &y : std::get<1>(x)) {
                         if (y->negSCC != negSCC) {
-                            if (t == OccurrenceType::POSITIVELY_STRATIFIED && !positive[y->negSCC]) { t = OccurrenceType::STRATIFIED; }
+                            if (t == OccurrenceType::POSITIVELY_STRATIFIED && !positive[y->negSCC]) {
+                                t = OccurrenceType::STRATIFIED;
+                            }
                         }
                         else if (y->posSCC < posSCC) {
                             assert(y->negSCC == negSCC);
-                            if (t == OccurrenceType::POSITIVELY_STRATIFIED)  { t = OccurrenceType::STRATIFIED; }
+                            if (t == OccurrenceType::POSITIVELY_STRATIFIED)  {
+                                t = OccurrenceType::STRATIFIED;
+                            }
                         }
                         else {
                             t = OccurrenceType::UNSTRATIFIED;
@@ -290,8 +324,12 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
                 }
                 for (auto &x : graphNode->data->provide) {
                     if (std::strncmp("#", x.second->sig().name().c_str(), 1) != 0) {
-                        if (positive.back()) { phead.push(std::move(x.second)); }
-                        else                 { nhead.push(std::move(x.second)); }
+                        if (positive.back()) {
+                            phead.insert(std::move(x.second));
+                        }
+                        else {
+                            nhead.insert(std::move(x.second));
+                        }
                     }
                 }
                 components.back().second = positive.back();
@@ -300,12 +338,23 @@ std::tuple<typename Dependency<Stm, HeadOcc>::ComponentVec, UGTermVec, UGTermVec
             posSCC++;
         }
     }
-    auto head = phead.to_vec();
-    head.erase(std::remove_if(head.begin(), head.end(), [&nhead](UGTerm const &term) { return nhead.find(term) != nhead.end(); }), head.end());
-    return std::make_tuple( std::move(components), std::move(head), nhead.to_vec() );
+
+    // NOTE: This hijacks the vector from the ordered_set This is safe because
+    // the destructor of the ordered_set just uses default generated
+    // destructors. Maybe open a PR to request something like a release
+    // function for the ordered set.
+    UGTermVec phead_vec = std::move(const_cast<std::vector<UGTerm>&>(phead.values_container())); // NOLINT
+    phead_vec.erase(
+        std::remove_if(
+            phead_vec.begin(),
+            phead_vec.end(),
+            [&nhead](UGTerm const &term) { return nhead.find(term) != nhead.end(); }),
+        phead_vec.end());
+    UGTermVec nhead_vec = std::move(const_cast<std::vector<UGTerm>&>(nhead.values_container())); // NOLINT
+    return std::make_tuple( std::move(components), std::move(phead_vec), std::move(nhead_vec) );
 }
 // }}}
 
 } } // namespace Ground Gringo
 
-#endif // _GRINGO_GROUND_DEPENDENCY_HH
+#endif // GRINGO_GROUND_DEPENDENCY_HH

@@ -56,7 +56,8 @@ struct ClingoPropagatorCheck_t {
 	enum Type {
 		No       = 0u, //!< Never call AbstractPropagator::check().
 		Total    = 1u, //!< Call AbstractPropagator::check() only on total assignment.
-		Fixpoint = 2u  //!< Call AbstractPropagator::check() on every propagation fixpoint.
+		Fixpoint = 2u, //!< Call AbstractPropagator::check() on every propagation fixpoint.
+		Both     = 3u  //!< Call AbstractPropagator::check() on both fixpoints and total assignment.
 	};
 };
 
@@ -97,11 +98,15 @@ public:
 	Potassco::Lit_t addWatch(Literal lit);
 	//! Removes the watch for lit from all solvers.
 	void            removeWatch(Literal lit);
-
 	//! Adds a watch for lit to the solver with the given id and returns encodeLit(lit).
 	Potassco::Lit_t addWatch(uint32 solverId, Literal lit);
 	//! Removes the watch for lit from solver with the given id.
 	void            removeWatch(uint32 solverId, Literal lit);
+	//! Freezes the given literal making it exempt from Sat-preprocessing.
+	/*!
+	 * \note Watched literals are automatically frozen.
+	 */
+	void            freezeLit(Literal lit);
 
 	//! Returns the propagator that was given on construction.
 	Potassco::AbstractPropagator* propagator() const { return prop_; }
@@ -111,13 +116,14 @@ public:
 	uint32 init(uint32 lastStep, Potassco::AbstractSolver& s);
 private:
 	typedef Potassco::Lit_t Lit_t;
-	enum Action { RemoveWatch = 0, AddWatch = 1 };
+	enum Action { RemoveWatch = 0, AddWatch = 1, FreezeLit = 2 };
 	struct History;
 	struct Change {
 		Change(Lit_t p, Action a);
 		Change(Lit_t p, Action a, uint32 sId);
 		bool operator<(const Change& rhs) const;
 		void apply(Potassco::AbstractSolver& s) const;
+		uint64 solverMask() const;
 		Lit_t lit;
 		int16 sId;
 		int16 action;
@@ -186,6 +192,7 @@ private:
 	size_t      prop_;  // offset into trail: literals [0, prop_) were propagated
 	size_t      epoch_; // number of calls into callback
 	uint32      level_; // highest undo level
+	uint32      propL_; // decision level on handling propagate() from theory propagator
 	int32       front_; // global assignment position for fixpoint checks
 	uint32      init_;  // last time init() was called
 	Literal     aux_;   // max active literal
@@ -199,16 +206,19 @@ public:
 
 	ClingoAssignment(const Solver& s);
 
-	virtual uint32_t size()            const;
-	virtual uint32_t unassigned()      const;
-	virtual bool     hasConflict()     const;
-	virtual uint32_t level()           const;
-	virtual uint32_t rootLevel()       const;
-	virtual bool     hasLit(Lit_t lit) const;
-	virtual Value_t  value(Lit_t lit)  const;
-	virtual uint32_t level(Lit_t lit)  const;
-	virtual Lit_t    decision(uint32_t)const;
-	virtual bool     isTotal()         const;
+	virtual uint32_t size()               const;
+	virtual uint32_t unassigned()         const;
+	virtual bool     hasConflict()        const;
+	virtual uint32_t level()              const;
+	virtual uint32_t rootLevel()          const;
+	virtual bool     hasLit(Lit_t lit)    const;
+	virtual Value_t  value(Lit_t lit)     const;
+	virtual uint32_t level(Lit_t lit)     const;
+	virtual Lit_t    decision(uint32_t)   const;
+	virtual bool     isTotal()            const;
+	virtual uint32_t trailSize()          const;
+	virtual Lit_t    trailAt(uint32_t)    const;
+	virtual uint32_t trailBegin(uint32_t) const;
 
 	const Solver& solver() const { return *solver_;  }
 private:

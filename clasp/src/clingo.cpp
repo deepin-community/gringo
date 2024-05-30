@@ -45,12 +45,15 @@ ClingoPropagatorLock::~ClingoPropagatorLock() {}
 /////////////////////////////////////////////////////////////////////////////////////////
 // ClingoAssignment
 /////////////////////////////////////////////////////////////////////////////////////////
+static const uint32_t trailOffset = 1u; // Offset for handling true literal.
+
 ClingoAssignment::ClingoAssignment(const Solver& s)
 	: solver_(&s) {}
 
 ClingoAssignment::Value_t ClingoAssignment::value(Lit_t lit)  const {
 	POTASSCO_REQUIRE(ClingoAssignment::hasLit(lit), "Invalid literal");
-	switch (solver_->value(decodeVar(lit))) {
+	const uint32_t var = decodeVar(lit);
+	switch (solver_->validVar(var) ? solver_->value(var) : value_free) {
 		default: return Value_t::Free;
 		case value_true:  return lit >= 0 ? Value_t::True  : Value_t::False;
 		case value_false: return lit >= 0 ? Value_t::False : Value_t::True;
@@ -65,13 +68,22 @@ ClingoAssignment::Lit_t ClingoAssignment::decision(uint32_t dl) const {
 	POTASSCO_REQUIRE(dl <= solver_->decisionLevel(), "Invalid decision level");
 	return encodeLit(dl ? solver_->decision(dl) : lit_true());
 }
-uint32_t ClingoAssignment::size()            const { return solver_->numVars(); }
-uint32_t ClingoAssignment::unassigned()      const { return solver_->numFreeVars(); }
+ClingoAssignment::Lit_t ClingoAssignment::trailAt(uint32_t pos) const {
+	POTASSCO_REQUIRE(pos < trailSize(), "Invalid trail position");
+	return pos != 0 ? encodeLit(solver_->trail()[pos - trailOffset]) : encodeLit(lit_true());
+}
+uint32_t ClingoAssignment::trailBegin(uint32_t dl) const {
+	POTASSCO_REQUIRE(dl <= solver_->decisionLevel(), "Invalid decision level");
+	return dl != 0 ? solver_->levelStart(dl) + trailOffset : 0;
+}
+uint32_t ClingoAssignment::size()            const { return std::max(solver_->numVars(), solver_->numProblemVars()) + trailOffset; }
+uint32_t ClingoAssignment::unassigned()      const { return size() - trailSize(); }
 bool     ClingoAssignment::hasConflict()     const { return solver_->hasConflict(); }
 uint32_t ClingoAssignment::level()           const { return solver_->decisionLevel(); }
 uint32_t ClingoAssignment::rootLevel()       const { return solver_->rootLevel(); }
-bool     ClingoAssignment::hasLit(Lit_t lit) const { return solver_->validVar(decodeVar(lit)); }
-bool     ClingoAssignment::isTotal()         const { return solver_->numFreeVars() == 0u; }
+bool     ClingoAssignment::hasLit(Lit_t lit) const { return decodeVar(lit) < size(); }
+bool     ClingoAssignment::isTotal()         const { return unassigned() == 0u; }
+uint32_t ClingoAssignment::trailSize()       const { return static_cast<uint32_t>(solver_->trail().size() + trailOffset); }
 /////////////////////////////////////////////////////////////////////////////////////////
 // ClingoPropagator::Control
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -106,8 +118,13 @@ bool ClingoPropagator::Control::propagate() {
 	ScopedUnlock unlocked(lock(), ctx_);
 	if (solver().hasConflict())    { return false; }
 	if (solver().queueSize() == 0) { return true;  }
+
 	ClingoPropagator::size_t epoch = ctx_->epoch_;
-	return (state_ & state_prop) != 0u && solver().propagateUntil(unlocked.obj_) && epoch == ctx_->epoch_;
+	ctx_->registerUndoCheck(solver());
+	ctx_->propL_ = solver().decisionLevel();
+	const bool result = (state_ & state_prop) != 0u && solver().propagateUntil(unlocked.obj_) && epoch == ctx_->epoch_;
+	ctx_->propL_ = UINT32_MAX;
+	return result;
 }
 Potassco::Lit_t ClingoPropagator::Control::addVariable() {
 	POTASSCO_REQUIRE(!assignment_.hasConflict(), "Invalid addVariable() on conflicting assignment");
@@ -124,6 +141,7 @@ void ClingoPropagator::Control::addWatch(Lit_t lit) {
 	Literal p = decodeLit(lit);
 	Solver& s = solver();
 	if (!s.hasWatch(p, ctx_)) {
+		POTASSCO_REQUIRE(!s.sharedContext()->validVar(p.var()) || !s.sharedContext()->eliminated(p.var()), "Watched literal not frozen");
 		s.addWatch(p, ctx_);
 		if ((state_ & state_init) != 0u && s.isTrue(p)) {
 			// are we too late?
@@ -152,7 +170,7 @@ static const uint32 ccFlags_s[2] = {
 };
 ClingoPropagator::ClingoPropagator(Propagator* p)
 	: call_(p)
-	, prop_(0), epoch_(0), level_(0), init_(0) {
+	, prop_(0), epoch_(0), level_(0), propL_(UINT32_MAX), front_(-1), init_(0) {
 }
 uint32 ClingoPropagator::priority() const { return static_cast<uint32>(priority_class_general); }
 
@@ -168,10 +186,13 @@ void ClingoPropagator::destroy(Solver* s, bool detach) {
 }
 
 bool ClingoPropagator::init(Solver& s) {
-	POTASSCO_REQUIRE(s.decisionLevel() == 0 && prop_ == trail_.size(), "Invalid init");
+	POTASSCO_REQUIRE(s.decisionLevel() == 0 && prop_ <= trail_.size(), "Invalid init");
 	Control ctrl(*this, s, state_init);
+	s.acquireProblemVars();
+	if (s.isMaster() && !s.sharedContext()->frozen())
+		call_->prepare(const_cast<SharedContext&>(*s.sharedContext()));
 	init_  = call_->init(init_, ctrl);
-	front_ = call_->checkMode() == ClingoPropagatorCheck_t::Fixpoint ? -1 : INT32_MAX;
+	front_ = (call_->checkMode() & ClingoPropagatorCheck_t::Fixpoint) ? -1 : INT32_MAX;
 	return true;
 }
 
@@ -215,6 +236,10 @@ void ClingoPropagator::undoLevel(Solver& s) {
 		ScopedLock(call_->lock(), call_->propagator(), Inc(epoch_))->undo(Control(*this, s), change);
 		prop_ = beg;
 	}
+	else if (level_ == propL_) {
+		propL_ = UINT32_MAX;
+		++epoch_;
+	}
 
 	if (front_ != INT32_MAX)
 		front_ = -1;
@@ -240,6 +265,9 @@ void ClingoPropagator::undoLevel(Solver& s) {
 
 bool ClingoPropagator::propagateFixpoint(Clasp::Solver& s, Clasp::PostPropagator*) {
 	POTASSCO_REQUIRE(prop_ <= trail_.size(), "Invalid propagate");
+	if (!s.sharedContext()->frozen())
+		return true;
+
 	for (Control ctrl(*this, s, state_prop); prop_ != trail_.size() || front_ < (int32)s.numAssignedVars();) {
 		if (prop_ != trail_.size()) {
 			// create copy because trail might change during call to user propagation
@@ -272,6 +300,7 @@ void ClingoPropagator::toClause(Solver& s, const Potassco::LitSpan& clause, Pota
 	if (aux_ < max) { aux_ = max; }
 	if ((Potassco::Clause_t::isVolatile(prop) || s.auxVar(max.var())) && !isSentinel(s.sharedContext()->stepLiteral())) {
 		mem.push_back(~s.sharedContext()->stepLiteral());
+		POTASSCO_REQUIRE(s.value(mem.back().var()) != value_free || s.decisionLevel() == 0, "Step literal must be assigned on level 1");
 	}
 	todo_.clause = ClauseCreator::prepare(s, mem, Clasp::ClauseCreator::clause_force_simplify, Constraint_t::Other);
 	todo_.flags  = ccFlags_s[int(Potassco::Clause_t::isStatic(prop))];
@@ -280,16 +309,22 @@ void ClingoPropagator::toClause(Solver& s, const Potassco::LitSpan& clause, Pota
 	}
 }
 bool ClingoPropagator::addClause(Solver& s, uint32 st) {
-	if (s.hasConflict()) { todo_.clear(); return false; }
+	if (s.hasConflict()) {
+		POTASSCO_REQUIRE(todo_.empty(), "Assignment not propagated");
+		return false;
+	}
 	if (todo_.empty())   { return true; }
 	const ClauseRep& clause = todo_.clause;
 	Literal w0 = clause.size > 0 ? clause.lits[0] : lit_false();
 	Literal w1 = clause.size > 1 ? clause.lits[1] : lit_false();
-	uint32  cs = (ClauseCreator::status(s, clause) & (ClauseCreator::status_unit|ClauseCreator::status_unsat));
-	if (cs && s.level(w1.var()) < s.decisionLevel() && s.isUndoLevel()) {
-		if ((st & state_ctrl) != 0u) { return false; }
-		if ((st & state_prop) != 0u) { ClingoPropagator::reset(); cancelPropagation(); }
-		s.undoUntil(s.level(w1.var()));
+	uint32  cs = ClauseCreator::status(s, clause);
+	if (cs & (ClauseCreator::status_unit|ClauseCreator::status_unsat)) {
+		uint32 dl = (cs & ClauseCreator::status_unsat) ? s.level(w0.var()) : s.level(w1.var());
+		if (dl < s.decisionLevel() && s.isUndoLevel()) {
+			if ((st & state_ctrl) != 0u) { return false; }
+			if ((st & state_prop) != 0u) { ClingoPropagator::reset(); cancelPropagation(); }
+			s.undoUntil(dl);
+		}
 	}
 	bool local = (todo_.flags & ClauseCreator::clause_no_add) != 0;
 	if (!s.isFalse(w0) || local || s.force(w0, this)) {
@@ -336,10 +371,11 @@ bool ClingoPropagator::simplify(Solver& s, bool) {
 
 bool ClingoPropagator::isModel(Solver& s) {
 	POTASSCO_REQUIRE(prop_ == trail_.size(), "Assignment not propagated");
-	if (call_->checkMode() == ClingoPropagatorCheck_t::Total) {
-		Control ctrl(*this, s);
-		ScopedLock(call_->lock(), call_->propagator(), Inc(epoch_))->check(ctrl);
-		return addClause(s, 0u) && s.numFreeVars() == 0 && s.queueSize() == 0;
+	if (call_->checkMode() & ClingoPropagatorCheck_t::Total) {
+		front_ = -1;
+		s.propagateFrom(this);
+		front_ = (call_->checkMode() & ClingoPropagatorCheck_t::Fixpoint) ? front_ : INT32_MAX;
+		return !s.hasConflict() && s.numFreeVars() == 0;
 	}
 	return true;
 }
@@ -354,6 +390,9 @@ bool ClingoPropagatorInit::Change::operator<(const Change& rhs) const {
 	int cmp = std::abs(lit) - std::abs(rhs.lit);
 	return cmp != 0 ? cmp < 0 : lit < rhs.lit;
 }
+uint64 ClingoPropagatorInit::Change::solverMask() const {
+	return static_cast<uint32_t>(sId) > 63 ? UINT64_MAX : bit_mask<uint64>(static_cast<uint32>(sId));
+}
 void ClingoPropagatorInit::Change::apply(Potassco::AbstractSolver& s) const {
 	switch (action) {
 		case AddWatch:    s.addWatch(lit);    break;
@@ -364,14 +403,13 @@ void ClingoPropagatorInit::Change::apply(Potassco::AbstractSolver& s) const {
 
 struct ClingoPropagatorInit::History : POTASSCO_EXT_NS::unordered_map<Potassco::Lit_t, uint64>{
 	void add(const Change& change) {
-		const uint64 mask = change.sId < 0 ? UINT64_MAX : bit_mask<uint64>(static_cast<uint32>(change.sId));
 		if (change.action == AddWatch) {
 			std::pair<iterator, bool> x = insert(value_type(change.lit, 0));
-			x.first->second |= mask;
+			x.first->second |= change.solverMask();
 		}
 		else if (change.action == RemoveWatch) {
 			iterator it = find(change.lit);
-			if (it != end() && (it->second &= ~mask) == 0) {
+			if (it != end() && (it->second &= ~change.solverMask()) == 0) {
 				erase(it);
 			}
 		}
@@ -381,10 +419,27 @@ struct ClingoPropagatorInit::History : POTASSCO_EXT_NS::unordered_map<Potassco::
 ClingoPropagatorInit::ClingoPropagatorInit(Potassco::AbstractPropagator& cb, ClingoPropagatorLock* lock, CheckType m)
 	: prop_(&cb), lock_(lock), history_(0), step_(1), check_(m) {
 }
-ClingoPropagatorInit::~ClingoPropagatorInit()       { delete history_; }
-void ClingoPropagatorInit::prepare(SharedContext&)  {}
-bool ClingoPropagatorInit::applyConfig(Solver& s)   { return s.addPost(new ClingoPropagator(this)); }
-void ClingoPropagatorInit::unfreeze(SharedContext&) {
+ClingoPropagatorInit::~ClingoPropagatorInit()         { delete history_; }
+bool ClingoPropagatorInit::applyConfig(Solver& s)     { return s.addPost(new ClingoPropagator(this)); }
+void ClingoPropagatorInit::prepare(SharedContext& ctx){
+	std::stable_sort(changes_.begin(), changes_.end());
+	for (ChangeList::const_iterator it = changes_.begin(), end = changes_.end(); it != end;) {
+		Lit_t lit = it->lit;
+		uint64_t addWatch = 0;
+		bool     freeze   = false;
+		do {
+			switch (it->action) {
+				case AddWatch:    addWatch |=  it->solverMask(); break;
+				case RemoveWatch: addWatch &= ~it->solverMask(); break;
+				case FreezeLit:   freeze = true; break;
+				default: break;
+			}
+		} while (++it != end && it->lit == lit);
+		if (freeze || addWatch)
+			ctx.setFrozen(decodeVar(lit), true);
+	}
+}
+void ClingoPropagatorInit::unfreeze(SharedContext&)   {
 	if (history_) {
 		for (ChangeList::const_iterator it = changes_.begin(), end = changes_.end(); it != end; ++it) {
 			history_->add(*it);
@@ -392,6 +447,10 @@ void ClingoPropagatorInit::unfreeze(SharedContext&) {
 	}
 	ChangeList().swap(changes_);
 	++step_;
+}
+
+void ClingoPropagatorInit::freezeLit(Literal lit) {
+	changes_.push_back(Change(encodeLit(lit), FreezeLit, 64));
 }
 
 Potassco::Lit_t ClingoPropagatorInit::addWatch(Literal lit) {
@@ -423,10 +482,15 @@ uint32 ClingoPropagatorInit::init(uint32 lastStep, Potassco::AbstractSolver& s) 
 		}
 	}
 	ChangeList changesForSolver;
+	bool isSorted = true;
 	for (ChangeList::const_iterator it = changes_.begin(), end = changes_.end(); it != end; ++it) {
-		if (it->sId < 0 || it->sId == sId) { changesForSolver.push_back(*it); }
+		if (it->sId < 0 || it->sId == sId) {
+			isSorted = isSorted && (changesForSolver.empty() || !(*it < changesForSolver.back()));
+			changesForSolver.push_back(*it);
+		}
 	}
-	std::stable_sort(changesForSolver.begin(), changesForSolver.end());
+	if (!isSorted)
+		std::stable_sort(changesForSolver.begin(), changesForSolver.end());
 	for (ChangeList::const_iterator it = changesForSolver.begin(), end = changesForSolver.end(); it != end; ++it) {
 		Lit_t lit = it->lit;
 		// skip all but the last change for a given literal

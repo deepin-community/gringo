@@ -22,6 +22,7 @@
 
 // }}}
 
+#include "clingo.hh"
 #include "tests.hh"
 #include <iostream>
 #include <fstream>
@@ -108,6 +109,20 @@ TEST_CASE("solving", "[clingo]") {
                 REQUIRE(models == ModelVec({{},{Id("a")}}));
                 REQUIRE(messages.empty());
             }
+        }
+        SECTION("solve") {
+            ctl.add("base", {}, "x(1).");
+            ctl.ground({{"base", {}}});
+            int n = 0;
+            auto atms = ctl.symbolic_atoms();
+            for (auto it = atms.begin(Signature{"x", 1, false}), ie = atms.end(); it != ie; ++it) {
+                ++n;
+            }
+            REQUIRE(n == 0);
+            for (auto it = atms.begin(Signature{"x", 1, true}), ie = atms.end(); it != ie; ++it) {
+                ++n;
+            }
+            REQUIRE(n == 1);
         }
         SECTION("get_statistics") {
             ctl.add("pigeon", {"p", "h"}, "1 {p(P,H) : P=1..p}1 :- H=1..h."
@@ -288,6 +303,42 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(models == (ModelVec{{ a(2), b(1), e(3) }, { a(2), e(3) }, { b(1), e(3) }, { e(3) }}));
 
         }
+        SECTION("backend-theory") {
+            ctl.with_backend([](Backend &backend) {
+                auto num_one = backend.add_theory_term_number(1);
+                auto num_two = backend.add_theory_term_number(2);
+                auto str_x = backend.add_theory_term_string("x");
+                auto fun = backend.add_theory_term_function("f", {num_one, num_two, str_x});
+                auto seq = backend.add_theory_term_sequence(TheorySequenceType::Set, {num_one, num_two, str_x});
+                auto fseq = backend.add_theory_term_function("f", {seq});
+
+                REQUIRE(num_one == backend.add_theory_term_number(1));
+                REQUIRE(num_two == backend.add_theory_term_number(2));
+                REQUIRE(str_x == backend.add_theory_term_string("x"));
+                REQUIRE(num_one == backend.add_theory_term_symbol(parse_term("1")));
+                REQUIRE(num_two == backend.add_theory_term_symbol(parse_term("2")));
+                REQUIRE(fun == backend.add_theory_term_symbol(parse_term("f(1,2,x)")));
+
+                auto elem = backend.add_theory_element({num_one, num_two, seq, fun}, {1, -2, 3});
+
+                backend.theory_atom(0, fun, {});
+                backend.theory_atom(0, backend.add_theory_term_symbol(parse_term("g(1,2)")), {});
+                backend.theory_atom(0, fseq, {elem});
+            });
+            auto atoms = ctl.theory_atoms();
+            using SV = std::vector<S>;
+            SV str_atoms;
+            TheoryAtom last{nullptr, 0};
+            for (auto atom : atoms) {
+                str_atoms.emplace_back(atom.to_string());
+                last = atom;
+            }
+            REQUIRE(str_atoms == SV{
+                "&f(1,2,x){}",
+                "&g(1,2){}",
+                "&f({1,2,x}){1,2,{1,2,x},f(1,2,x): #aux(1),not #aux(2),#aux(3)}"});
+            REQUIRE(last.elements().back().condition() == LiteralSpan{{1, -2, 3}});
+        }
         SECTION("optimize") {
             ctl.add("base", {}, "2 {a; b; c; d}.\n"
                                 ":- a, b.\n"
@@ -316,15 +367,14 @@ TEST_CASE("solving", "[clingo]") {
         }
 #endif
         SECTION("model") {
-            ctl.add("base", {}, "a. $x $= 1. #show b.");
+            ctl.add("base", {}, "a. #show b.");
             ctl.ground({{"base", {}}});
             bool sat = false;
             for (auto &m : ctl.solve()) {
                 REQUIRE(m.type() == ModelType::StableModel);
                 REQUIRE(m.symbols(ShowType::Atoms) == (SymbolVector{Id("a")}));
                 REQUIRE(m.symbols(ShowType::Terms) == (SymbolVector{Id("b")}));
-                REQUIRE(m.symbols(ShowType::CSP) == (SymbolVector{Function("$", {Id("x"), Number(1)})}));
-                REQUIRE(m.symbols(ShowType::Shown) == (SymbolVector{Function("$", {Id("x"), Number(1)}), Id("a"), Id("b")}));
+                REQUIRE(m.symbols(ShowType::Shown) == (SymbolVector{Id("a"), Id("b")}));
                 REQUIRE(m.symbols(ShowType::Atoms | ShowType::Complement).size() == 0);
                 REQUIRE( m.contains(Id("a")));
                 REQUIRE(!m.contains(Id("b")));
@@ -450,6 +500,22 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(atom.guard().second.number() == 42);
             REQUIRE(atom.literal() == 0);
         }
+        SECTION("theory-not") {
+            char const *theory =
+                "#theory t {\n"
+                "  term {\n"
+                "    not : 0, unary;\n"
+                "    not : 1, binary, left\n"
+                "  };\n"
+                "  &atom/0 : term, directive\n"
+                "}.\n"
+                "&atom { not (1 not 2) }.\n";
+            ctl.add("base", {}, theory);
+            ctl.ground({{"base", {}}});
+            auto atoms = ctl.theory_atoms();
+            REQUIRE(atoms.size() == 1);
+            REQUIRE(atoms.begin()->to_string() == "&atom{(not (1 not 2))}");
+        }
         SECTION("symbolic atoms") {
             ctl.add("base", {}, "p(1). {p(2)}. #external p(3). q.");
             ctl.ground({{"base", {}}});
@@ -513,19 +579,19 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(models == ModelVec{{}});
             REQUIRE(messages == MessageVec({{WarningCode::OperationUndefined, "<block>:1:3-6: info: operation undefined:\n  (1+a)\n"}}));
         }
-        SECTION("use_enumeration_assumption") {
+        SECTION("enable_enumeration_assumption") {
             ctl.add("base", {}, "{p;q}.");
             ctl.ground({{"base", {}}});
-            ctl.use_enumeration_assumption(false);
+            ctl.enable_enumeration_assumption(false);
             REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
             REQUIRE(models.size() == 4);
             REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
             REQUIRE(models.size() <= 4);
         }
-        SECTION("use_enumeration_assumption") {
+        SECTION("enable_enumeration_assumption") {
             ctl.add("base", {}, "{p;q}.");
             ctl.ground({{"base", {}}});
-            ctl.use_enumeration_assumption(false);
+            ctl.enable_enumeration_assumption(false);
             REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
             REQUIRE(models.size() == 4);
             REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
@@ -542,6 +608,29 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(dom.find(Id("a")) == dom.end());
             REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
             REQUIRE(models.size() == 1);
+        }
+        SECTION("cleanup again") {
+            ctl.add("base", {}, R"(
+                p(X) :- not q(X), X=2..3.
+                q(X) :- not p(X), X=1..2.
+
+                a :- not p(3).
+                b :- not q(1).)");
+
+            ctl.ground({{"base", {}}});
+            ctl.cleanup(); // no cleanup with current implementation
+            auto sas = ctl.symbolic_atoms();
+            auto itA = sas.find(Clingo::Id("a"));
+            auto itB = sas.find(Clingo::Id("b"));
+            REQUIRE((itA != sas.end() || itB != sas.end()));
+            REQUIRE((itA == sas.end() || itB == sas.end()));
+
+            ctl.configuration()["solve"]["solve_limit"] = "1";
+            ctl.solve();
+            ctl.cleanup();
+            itA = sas.find(Clingo::Id("a"));
+            itB = sas.find(Clingo::Id("b"));
+            REQUIRE((itA == sas.end() && itB == sas.end()));
         }
         SECTION("const") {
             ctl.add("base", {}, "#const a=10.");
@@ -603,6 +692,35 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(models == ModelVec({}));
             REQUIRE(trail == std::vector<std::string>({"IP: incremental", "BS", "R: 1:-~1", "ES"}));
         }
+        SECTION("theory data bug") {
+            struct Observer : Clingo::GroundProgramObserver {
+                Observer(std::vector<id_t> &atoms) : atoms_{atoms} { }
+                void theory_atom(id_t atom_id_or_zero, id_t , IdSpan ) override {
+                    atoms_.emplace_back(atom_id_or_zero);
+                }
+                std::vector<id_t> &atoms_;
+            };
+
+            std::vector<id_t> atoms;
+            Observer o{atoms};
+            ctl.register_observer(o);
+            ctl.add("base",{}, R"(#theory csp {
+                                   dom_term {};
+                                   &dom/0 : dom_term, any}.)");
+            ctl.add("base",{}, "&dom {0}. &dom {1}.");
+            ctl.add("acid",{}, "&dom {1}. &dom {2}.");
+            REQUIRE(atoms == std::vector<id_t>({}));
+            ctl.ground({{"base", {}}});
+            REQUIRE(atoms == std::vector<id_t>({1, 2}));
+            ctl.ground({{"acid", {}}});
+            REQUIRE(atoms == std::vector<id_t>({1, 2, 3}));
+            ctl.cleanup();
+            REQUIRE(atoms == std::vector<id_t>({1, 2, 3}));
+            { ctl.backend(); }
+            REQUIRE(atoms == std::vector<id_t>({1, 2, 3}));
+            { ctl.backend(); }
+            REQUIRE(atoms == std::vector<id_t>({1, 2, 3}));
+        }
         SECTION("events") {
             ctl.add("base", {}, "{a}.");
             ctl.ground({{"base", {}}});
@@ -630,6 +748,105 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(test_solve(std::move(handle), models).is_satisfiable());
             REQUIRE(m == (goon ? 2 : 1));
             REQUIRE(f == 1);
+        }
+        SECTION("on_unsat") {
+            struct EH : Clingo::SolveEventHandler {
+                EH(std::vector<int64_t> &v) : v(v) { }
+                void on_unsat(Clingo::Span<int64_t> lower_bound) override {
+                    REQUIRE(lower_bound.size() == 1);
+                    v.push_back(lower_bound.back());
+                }
+                std::vector<int64_t> &v;
+            };
+            std::vector<int64_t> values;
+            EH handler{values};
+            auto conf = ctl.configuration();
+            conf["solver"]["opt_strategy"] = "usc,oll,0";
+            ctl.add("base", {}, "1 { p(X); q(X) } 1 :- X=1..3. #minimize { 1,p,X: p(X); 1,q,X: q(X) }.");
+            ctl.ground({{"base", {}}});
+            auto handle = ctl.solve(LiteralSpan{}, &handler);
+            REQUIRE(test_solve(std::move(handle), models).is_satisfiable());
+            REQUIRE(values == std::vector<int64_t>{1,2,3});
+        }
+        SECTION("pos_strat") {
+            ctl.with_backend([](Clingo::Backend &b){
+                b.rule(true, {b.add_atom(Clingo::Function("a", {Clingo::Number(1)}))}, {});
+                b.rule(true, {b.add_atom(Clingo::Function("a", {Clingo::Number(2)}))}, {});
+            });
+            ctl.add("base", {}, ":- a(X).");
+            ctl.ground({{"base", {}}});
+            REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
+            REQUIRE(models == ModelVec({{}}));
+        }
+        SECTION("bug_classical_1") {
+            ctl.add("a", {}, "-a.");
+            ctl.add("b", {}, "a.");
+
+            ctl.ground({{"a", {}}});
+            REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
+            REQUIRE(models == ModelVec({{Function("a", {}, false)}}));
+
+            ctl.ground({{"b", {}}});
+            REQUIRE(test_solve(ctl.solve(), models).is_unsatisfiable());
+            REQUIRE(models == ModelVec({}));
+        }
+        SECTION("bug_classical_2") {
+            ctl.add("a", {}, "-a.");
+            ctl.add("b", {}, "a.");
+
+            ctl.with_backend([](Backend &bck) {
+                auto a = bck.add_atom(Function("a", {}, true));
+                auto b = bck.add_atom(Function("a", {}, false));
+                bck.rule(true, {a, b}, {});
+            });
+
+            REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
+            REQUIRE(models == ModelVec({{}, {Function("a", {}, true)}, {Function("a", {}, false)}}));
+        }
+        SECTION("bug_on_model") {
+            class OnModel : public SolveEventHandler {
+            public:
+                OnModel(std::vector<std::string> &events) : events_{events} { }
+                bool on_model(Model &model) override {
+                    static_cast<void>(model);
+                    events_.emplace_back("on_model");
+                    return true;
+                }
+            private:
+                std::vector<std::string> &events_;
+            };
+
+            std::vector<std::string> events;
+            OnModel handler{events};
+            {
+                auto hnd = ctl.solve(LiteralSpan{}, &handler, true, true);
+                for (auto &&m : hnd) {
+                    events.emplace_back("on_yield");
+                }
+                hnd.get();
+            }
+            REQUIRE(events == std::vector<std::string>{"on_model", "on_yield"});
+            events.clear();
+            {
+                auto hnd = ctl.solve(LiteralSpan{}, &handler, false, true);
+                for (auto &&m : hnd) {
+                    events.emplace_back("on_yield");
+                }
+                hnd.get();
+            }
+            REQUIRE(events == std::vector<std::string>{"on_model", "on_yield"});
+        }
+    }
+    SECTION("with single-shot control") {
+        MessageVec messages;
+        ModelVec models;
+        Control ctl{{"0", "--single-shot"}, [&messages](WarningCode code, char const *msg) { messages.emplace_back(code, msg); }, 20};
+        SECTION("single-shot") {
+            ctl.add("step", {"k"}, "p(k).");
+            ctl.ground({{"step", {Number(1)}}});
+            REQUIRE(test_solve(ctl.solve(), models).is_satisfiable());
+            REQUIRE(models == ModelVec({{Function("p", {Number(1)})}}));
+            REQUIRE_THROWS_AS(ctl.ground({{"step", {Number(2)}}}), std::logic_error);
         }
     }
 }

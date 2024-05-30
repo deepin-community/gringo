@@ -7,12 +7,12 @@ def print_conf(conf, ident):
         subconf = getattr(conf, key)
         if isinstance(subconf, clingo.Configuration):
             label = key
-            if (len(subconf) >= 0):
+            if subconf.is_array:
                 label += "[0.." + str(len(subconf)) + "]"
-            print ("{0}{1} - {2}".format(ident, label, getattr(conf, "__desc_" + key)))
+            print ("{0}{1} - {2}".format(ident, label, conf.description(key)))
             print_conf(subconf, "  " + ident + label + ".")
         else:
-            print ("{0}{1}[={2}] - {3}".format(ident, key, subconf, getattr(conf, "__desc_" + key)))
+            print ("{0}{1}[={2}] - {3}".format(ident, key, subconf, conf.description(key)))
 
 def main(prg):
     prg.ground([("base", [])])
