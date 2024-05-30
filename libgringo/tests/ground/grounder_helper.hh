@@ -44,16 +44,18 @@ inline void ground(std::string const &str, Output::OutputFormat fmt, std::ostrea
     Input::Program prg;
     Defines defs;
     Gringo::Test::TestContext context;
-    Input::NongroundProgramBuilder pb{ context, prg, out, defs };
+    NullBackend bck;
+    Input::NongroundProgramBuilder pb{ context, prg, out.outPreds, defs };
     bool incmode;
-    Input::NonGroundParser ngp{ pb, incmode };
+    Input::NonGroundParser ngp{ pb, bck, incmode };
     ngp.pushStream("-", gringo_make_unique<std::stringstream>(str), module.logger);
     ngp.parse(module.logger);
     prg.rewrite(defs, module.logger);
     Ground::Program gPrg(prg.toGround({Sig{"base", 0, false}}, out.data, module.logger));
     Parameters params;
     params.add("base", {});
-    gPrg.ground(params, context, out, module);
+    gPrg.prepare(params, out, module);
+    gPrg.ground(context, out, module);
     out.endStep({});
 }
 

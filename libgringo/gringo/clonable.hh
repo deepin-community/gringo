@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_CLONABLE_HH
-#define _GRINGO_CLONABLE_HH
+#ifndef GRINGO_CLONABLE_HH
+#define GRINGO_CLONABLE_HH
 
 namespace Gringo {
 
@@ -32,23 +32,29 @@ namespace Gringo {
 template <class Base>
 class Clonable {
 public:
+    Clonable() = default;
+    Clonable(Clonable const &other) = default;
+    Clonable(Clonable && other) noexcept = default;
+    Clonable &operator=(Clonable const &other) = default;
+    Clonable &operator=(Clonable &&other) noexcept = default;
+    virtual ~Clonable() noexcept = default;
+
     virtual Base *clone() const = 0;
-    virtual ~Clonable() { }
 };
 
 // }}}
 
 } // namespace Gringo
 
-#define GRINGO_CALL_CLONE(T) \
+#define GRINGO_CALL_CLONE(T) /* NOLINT */ \
 namespace Gringo { \
 template <> \
 struct clone<T> { \
-    inline T operator()(T const &x) const { \
+    inline T operator()(T const &x) const { /* NOLINT */ \
         return x.clone(); \
     } \
 }; \
 }
 
-#endif // _GRINGO_CLONABLE_HH
+#endif // GRINGO_CLONABLE_HH
 

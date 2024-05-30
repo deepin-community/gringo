@@ -1,3 +1,45 @@
+clasp 3.3.9: Saturday, 10th September 2022
+  * fixed issue https://github.com/potassco/clasp/issues/80
+  * fixed issue https://github.com/potassco/clasp/issues/81
+  * fixed issue https://github.com/potassco/clasp/issues/84
+  * fixed issue https://github.com/potassco/clasp/issues/85
+  * refined overflow checks in LogicProgram
+
+clasp 3.3.8: Tuesday, 3rd May 2022
+  * fixed issue https://github.com/potassco/clasp/issues/75
+  * fixed issue https://github.com/potassco/clasp/issues/76
+  * fixed issue https://github.com/potassco/clingcon/issues/85
+  * updated catch2 (https://github.com/potassco/clasp/issues/73)
+  * adjusted TextOutput (https://github.com/potassco/clingo/issues/355)
+  * moved clasp app to cli part of library
+
+clasp 3.3.7: Tuesday, 16th November 2021
+  * fixed issue https://github.com/potassco/clingo/issues/342
+  * fixed issue https://github.com/potassco/clingcon/issues/81
+  * fixed issue https://github.com/potassco/clasp/issues/72
+  * fixed issue https://github.com/potassco/clasp/issues/71
+
+clasp 3.3.6: Sunday, 18th April 2021
+  * fixed a regression in preprocessing of disjunctions
+  * fixed issue https://github.com/potassco/clasp/issues/48
+  * fixed issue https://github.com/potassco/clasp/issues/51
+  * fixed issue https://github.com/potassco/clasp/issues/52
+  * fixed issue https://github.com/potassco/clasp/issues/54
+  * fixed issue https://github.com/potassco/clasp/issues/55
+  * fixed issue https://github.com/potassco/clasp/issues/57
+  * fixed issue https://github.com/potassco/clasp/issues/65
+  * fixed issue https://github.com/potassco/clasp/issues/65
+  * fixed issue https://github.com/potassco/clasp/issues/69
+  * fixed an issue in optimal model enumeration
+    (see: https://github.com/potassco/clingcon/issues/58)
+  * added support for single shot solving while keeping the logic program
+    (https://github.com/potassco/clasp/issues/64)
+  * added support for getting final conflict
+    (https://github.com/potassco/clasp/issues/59)
+  * added lower bounds to clingo statistics
+  * added support for accessing trail from Potassco::Assignment
+    (https://github.com/potassco/clasp/issues/49)
+
 clasp 3.3.5: Friday, 23rd August 2019
   * added support for clingo heuristic
   * fixed issue https://github.com/potassco/clasp/issues/36

@@ -258,6 +258,9 @@ void SolveAlgorithm::setEnumerator(Enumerator& e) {
 const Model& SolveAlgorithm::model() const {
 	return enum_->lastModel();
 }
+const LitVec* SolveAlgorithm::unsatCore() const {
+	return core_.get();
+}
 bool SolveAlgorithm::interrupt() {
 	return doInterrupt();
 }
@@ -273,11 +276,38 @@ bool SolveAlgorithm::attach(SharedContext& ctx, ModelHandler* onModel) {
 	time_    = ThreadTime::getTime();
 	onModel_ = onModel;
 	last_    = value_free;
+	core_.reset(0);
 	if (!enum_.get()) { enum_ = EnumOptions::nullEnumerator(); }
 	return true;
 }
 void SolveAlgorithm::detach() {
 	if (ctx_) {
+		if (enum_->enumerated() == 0 && !interrupted()) {
+			Solver* s = ctx_->master();
+			Literal step = ctx_->stepLiteral();
+			s->popRootLevel(s->rootLevel());
+			core_ = new LitVec();
+			for (LitVec::const_iterator it = path_->begin(); it != path_->end(); ++it) {
+				if (s->isTrue(*it) || *it == step)
+					continue;
+				if (!s->isTrue(step) && !s->pushRoot(step))
+					break;
+				core_->push_back(*it);
+				if (!s->pushRoot(*it)) {
+					if (!s->isFalse(*it)) {
+						core_->clear();
+						s->resolveToCore(*core_);
+						if (!core_->empty() && (*core_)[0] == step) {
+							core_->front() = core_->back();
+							core_->pop_back();
+						}
+					}
+					break;
+				}
+			}
+			s->popRootLevel(s->rootLevel());
+		}
+		doDetach();
 		ctx_->master()->stats.addCpuTime(ThreadTime::getTime() - time_);
 		onModel_ = 0;
 		ctx_     = 0;
@@ -319,8 +349,8 @@ bool SolveAlgorithm::next() {
 	}
 	if (last_ == value_true) {
 		Solver& s = *ctx_->solver(model().sId);
-		if (onModel_ && !onModel_->onModel(s, model())) { last_ = value_stop; }
-		if (!ctx_->report(s, model())) { last_ = value_stop; }
+		if (onModel_ && !onModel_->onModel(s, model()))       { last_ = value_stop; }
+		if (reportM_ && !ctx_->report(s, model()))            { last_ = value_stop; }
 		if (!enum_->tentative() && model().num >= enumLimit_) { last_ = value_stop; }
 		return true;
 	}
@@ -341,7 +371,7 @@ void SolveAlgorithm::stop() {
 bool SolveAlgorithm::reportModel(Solver& s) const {
 	for (const Model& m = enum_->lastModel();;) {
 		bool r1 = !onModel_ || onModel_->onModel(s, m);
-		bool r2 = s.sharedContext()->report(s, m);
+		bool r2 = !reportM_ || s.sharedContext()->report(s, m);
 		bool res= r1 && r2 && (enumLimit_ > m.num || enum_->tentative());
 		if (!res || (res = !interrupted()) == false || !enum_->commitSymmetric(s)) { return res; }
 	}
@@ -414,17 +444,20 @@ int SequentialSolve::doNext(int last) {
 void SequentialSolve::doStop() {
 	if (solve_.get()) {
 		enumerator().end(solve_->solver());
-		ctx().detach(solve_->solver());
 		solve_ = 0;
 	}
 }
+void SequentialSolve::doDetach() {
+	ctx().detach(*ctx().master());
+}
+
 bool SequentialSolve::doSolve(SharedContext& ctx, const LitVec& gp) {
-	BasicSolve solve(*ctx.master(), ctx.configuration()->search(0), limits());
 	// Add assumptions - if this fails, the problem is unsat
 	// under the current assumptions but not necessarily unsat.
-	Solver& s = solve.solver();
+	Solver& s = *ctx.master();
 	bool more = !interrupted() && ctx.attach(s) && enumerator().start(s, gp);
-	for (InterruptHandler term(term_ >= 0 ? &s : (Solver*)0, &term_); more;) {
+	InterruptHandler term(term_ >= 0 ? &s : (Solver*)0, &term_);
+	for (BasicSolve solve(s, ctx.configuration()->search(0), limits()); more;) {
 		ValueRep res;
 		while ((res = solve.solve()) == value_true && (!enumerator().commitModel(s) || reportModel(s))) {
 			enumerator().update(s);
@@ -436,7 +469,6 @@ bool SequentialSolve::doSolve(SharedContext& ctx, const LitVec& gp) {
 		else                                   { enumerator().end(s); more = enumerator().start(s, gp); }
 	}
 	enumerator().end(s);
-	ctx.detach(s);
 	return more;
 }
 }

@@ -22,8 +22,8 @@
 
 // }}}
 
-#ifndef _GRINGO_COMPARABLE_HH
-#define _GRINGO_COMPARABLE_HH
+#ifndef GRINGO_COMPARABLE_HH
+#define GRINGO_COMPARABLE_HH
 
 namespace Gringo {
 
@@ -32,15 +32,21 @@ namespace Gringo {
 template <class Base>
 class Comparable {
 public:
+    Comparable() = default;
+    Comparable(Comparable const &other) = default;
+    Comparable(Comparable && other) noexcept = default;
+    Comparable &operator=(Comparable const &other) = default;
+    Comparable &operator=(Comparable &&other) noexcept = default;
+    virtual ~Comparable() noexcept = default;
+
     virtual bool operator==(Base const &other) const = 0;
     virtual bool operator!=(Base const &other) const { return !(*this == other); }
-    virtual ~Comparable() { }
 };
 
 // }}}
 
 } // namespace Gringo
 
-#endif // _GRINGO_COMPARABLE_HH
+#endif // GRINGO_COMPARABLE_HH
 
 

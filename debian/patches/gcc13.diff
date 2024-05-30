@@ -1,0 +1,33 @@
+Description: Fix build with GCC 13
+Author: Matthias Klose
+
+--- a/third_party/catch/src/catch2/internal/catch_string_manip.hpp
++++ b/third_party/catch/src/catch2/internal/catch_string_manip.hpp
+@@ -10,6 +10,7 @@
+ 
+ #include <catch2/internal/catch_stringref.hpp>
+ 
++#include <cstdint>
+ #include <string>
+ #include <iosfwd>
+ #include <vector>
+--- a/third_party/catch/src/catch2/catch_test_case_info.hpp
++++ b/third_party/catch/src/catch2/catch_test_case_info.hpp
+@@ -15,6 +15,7 @@
+ #include <catch2/internal/catch_unique_ptr.hpp>
+ 
+ 
++#include <cstdint>
+ #include <string>
+ #include <vector>
+ 
+--- a/third_party/catch/src/catch2/internal/catch_xmlwriter.cpp
++++ b/third_party/catch/src/catch2/internal/catch_xmlwriter.cpp
+@@ -11,6 +11,7 @@
+ #include <catch2/internal/catch_enforce.hpp>
+ #include <catch2/internal/catch_xmlwriter.hpp>
+ 
++#include <cstdint>
+ #include <iomanip>
+ #include <type_traits>
+ 

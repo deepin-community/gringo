@@ -9,20 +9,41 @@ class Propagator:
     def init(self, init):
         a = init.solver_literal(init.symbolic_atoms[clingo.Function("a")].literal)
         b = init.solver_literal(init.symbolic_atoms[clingo.Function("b")].literal)
+        c = init.solver_literal(init.symbolic_atoms[clingo.Function("c")].literal)
         if self.step == 0:
-            assert(init.add_clause([-a, -b]))
-            assert(init.add_clause([-a,  b]))
-            assert(init.add_clause([-a, -a, -b]))
-            assert(init.add_clause([-a, a]))
+            l = init.add_literal()
+            init.add_clause([-b, l])
+            init.propagate()
+            init.add_clause([-l, b])
+            init.propagate()
+            init.add_clause([-c, l])
+            init.propagate()
+            init.add_clause([-l, c])
+            init.propagate()
+            init.add_clause([-a, -b])
+            init.propagate()
+            init.add_clause([-a,  b])
+            init.propagate()
+            init.add_clause([-a, -a, -b])
+            init.propagate()
+            init.add_clause([-a, a])
+            init.propagate()
         if self.step == 1:
-            assert(init.add_clause([b]))
-            assert(init.add_clause([b]))
+            init.add_clause([b])
+            init.propagate()
+            init.add_clause([b])
+            init.propagate()
         if self.step == 2:
-            assert(not init.add_clause([]))
-            assert(not init.add_clause([a]))
-            assert(not init.add_clause([b]))
-            assert(not init.add_clause([-a]))
-            assert(not init.add_clause([-b]))
+            init.add_clause([])
+            init.propagate()
+            init.add_clause([a])
+            init.propagate()
+            init.add_clause([b])
+            init.propagate()
+            init.add_clause([-a])
+            init.propagate()
+            init.add_clause([-b])
+            init.propagate()
         self.step += 1
 
 def main(prg):
@@ -34,4 +55,4 @@ def main(prg):
 
 #end.
 
-{ a; b }.
+{ a; b; c }.

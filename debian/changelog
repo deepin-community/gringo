@@ -1,3 +1,33 @@
+gringo (5.6.2-1) unstable; urgency=medium
+
+  * Team upload.
+
+  [ Andreas Tille ]
+  * New upstream version
+  * Standards-Version: 4.6.2 (routine-update)
+  * Reorder sequence of d/control fields by cme (routine-update)
+  * Add ${python3:Depends}
+  * Remove Python3 cache dir
+  * Provide symbols file fo amd64 only (to prevent regression for
+    #963054 and other potential issues)
+  * Depends: python3
+  * Fix versioned links to match SONAME
+  * Build-Depends: dh-sequence-python3
+  * Deactivate autopkgtests gringo1 and gringo4
+
+  [ Matthias Klose ]
+  * Fix build with Python 3.12. Closes: #1061316.
+  * Fix build with new catch2 version. Closes: #1054688.
+  * Fix build with GCC 13.
+  * Explicitly mention the build system.
+
+  [ Graham Inggs ]
+  * Add (Build-)Depends: python3-cffi.
+  * Reduce thread count for test_clingo_app.
+  * Skip hanging test_clingo_app for now.
+
+ -- Andreas Tille <tille@debian.org>  Mon, 12 Feb 2024 09:02:55 +0100
+
 gringo (5.4.1-3) unstable; urgency=medium
 
   * debian/symbols: fix symbols for g++-10 >= 10.2.1

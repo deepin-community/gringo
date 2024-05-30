@@ -49,16 +49,18 @@ std::string ground(std::string const &str, std::initializer_list<std::string> fi
     Defines defs;
     Gringo::Test::TestGringoModule module;
     Gringo::Test::TestContext context;
-    Input::NongroundProgramBuilder pb{ context, prg, out, defs };
+    NullBackend bck;
+    Input::NongroundProgramBuilder pb{ context, prg, out.outPreds, defs };
     bool incmode;
-    Input::NonGroundParser ngp{ pb, incmode };
+    Input::NonGroundParser ngp{ pb, bck, incmode };
     ngp.pushStream("-", gringo_make_unique<std::stringstream>(str), module);
     ngp.parse(module);
     prg.rewrite(defs, module);
     Program gPrg(prg.toGround({Sig{"base", 0, false}}, out.data, module));
     Parameters params;
     params.add("base", {});
-    gPrg.ground(params, context, out, module);
+    gPrg.prepare(params, out, module);
+    gPrg.ground(context, out, module);
     out.endStep({});
 
     std::string line;
@@ -356,14 +358,14 @@ TEST_CASE("ground-instantiation", "[ground]") {
 
     SECTION("bodyaggregate3") {
         REQUIRE(
-            "a:-#true,not c.\n"
+            "a:-not c,#true.\n"
             "c.\n" == ground(
                 "a :- not { c } >= 1, not c."
                 "b :- a, #false."
                 "c :- not b, {b; not b} >= 1."
                 ));
         REQUIRE(
-            "a:-#false,not c.\n"
+            "a:-not c,#false.\n"
             "c.\n" == ground(
                 "a :- not not { c } >= 1, not c."
                 "b :- a, #false."
@@ -901,7 +903,7 @@ TEST_CASE("ground-instantiation", "[ground]") {
             "a.\n"
             "b.\n"
             "c.\n"
-            "e;d.\n"
+            "d;e.\n"
             "f:-d,e.\n" == ground(
                 "a.\n"
                 "b.\n"
@@ -941,7 +943,7 @@ TEST_CASE("ground-instantiation", "[ground]") {
             "out(q(1)):-q(1).\n" "out(q(2)):-q(2).\n" "out(q(3)):-q(3).\n"
             "out(r(3)):-r(3).\n" "out(r(4)):-r(4).\n" "out(r(5)):-r(5).\n"
             "p(1).\n" "p(2).\n" "p(3).\n" "p(4).\n" "p(5).\n"
-            "r(3);r(4);r(5);q(1);q(2);q(3);not r(3);not r(4);not r(5).\n" == ground(
+            "q(1);q(2);q(3);r(3);r(4);r(5);not r(3);not r(4);not r(5).\n" == ground(
                 "p(1..5).\n"
                 "q(X) : p(X), X <= 3; r(X) : p(X), X >= 3; not r(X) : p(X), X >= 3.\n"
                 "out(q(X)):-q(X).\n"
@@ -990,7 +992,7 @@ TEST_CASE("ground-instantiation", "[ground]") {
             "strategic(6);strategic(5).\n"
             "strategic(6);strategic(6).\n" == ground(
                 strategicA1() +
-                "strategic(X1); strategic(X2) :- produced_by(P,X1,X2).\n"
+                "strategic(X2); strategic(X1) :- produced_by(P,X1,X2).\n"
                 "strategic(W) :- controlled_by(W,X1,X2,X3), strategic(X1), strategic(X2), strategic(X3).\n", {"strategic("}));
     }
 

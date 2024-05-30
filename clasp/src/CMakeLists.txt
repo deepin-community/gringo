@@ -75,6 +75,7 @@ set(header_util
 	${header_path}/util/timer.h)
 source_group("${ide_header}\\util" FILES ${header_util})
 set(header_cli
+	${header_path}/cli/clasp_app.h
 	${header_path}/cli/clasp_cli_configs.inl
 	${header_path}/cli/clasp_cli_options.inl
 	${header_path}/cli/clasp_output.h
@@ -84,6 +85,7 @@ source_group("${ide_header}\\cli" FILES ${header_cli})
 set(src
 	asp_preprocessor.cpp
 	cb_enumerator.cpp
+	clasp_app.cpp
 	clasp_facade.cpp
 	clasp_options.cpp
 	clasp_output.cpp
@@ -130,7 +132,6 @@ if(MSVC)
 	set(VC_RELEASE_OPTIONS /Oi /Oy /GL /Gy /GS-)
 	target_compile_definitions(libclasp PUBLIC "$<$<CONFIG:RELEASE>:_SECURE_SCL=0>")
 	target_compile_options(libclasp PUBLIC "$<$<CONFIG:RELEASE>:${VC_RELEASE_OPTIONS}>")
-	set_target_properties(libclasp PROPERTIES PREFIX "lib")
 endif()
 target_include_directories(libclasp PUBLIC
 	$<BUILD_INTERFACE:${CLASP_SOURCE_DIR}>
@@ -144,12 +145,12 @@ set_target_properties(libclasp PROPERTIES
 
 # installation
 if (CLASP_INSTALL_LIB)
-	install(TARGETS libclasp EXPORT clasp DESTINATION "${CMAKE_INSTALL_LIBDIR}/${clasp_library_dest}")
-	install(FILES ${header}               DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp")
-	install(FILES ${header_util}          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/util")
-	install(FILES ${header_cli}           DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/cli")
+	install(TARGETS libclasp EXPORT ClaspTargets DESTINATION "${CMAKE_INSTALL_LIBDIR}/${clasp_library_dest}")
+	install(FILES ${header}                      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp")
+	install(FILES ${header_util}                 DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/util")
+	install(FILES ${header_cli}                  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/cli")
 	if (header_mt)
-		install(FILES ${header_mt}        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/mt")
+		install(FILES ${header_mt}               DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${clasp_include_dest}/clasp/mt")
 	endif()
 endif()
 

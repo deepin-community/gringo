@@ -159,8 +159,9 @@ public:
 	//! A handle to a possibly asynchronously computed SolveResult.
 	class SolveHandle {
 	public:
-		typedef SolveResult  Result;
-		typedef const Model* ModelRef;
+		typedef SolveResult   Result;
+		typedef const Model*  ModelRef;
+		typedef const LitVec* CoreRef;
 		explicit SolveHandle(SolveStrategy*);
 		SolveHandle(const SolveHandle&);
 		~SolveHandle();
@@ -171,6 +172,8 @@ public:
 		 * @{ */
 		//! Waits until a result is ready and returns it.
 		Result   get()              const;
+		//! Returns an unsat core if get() returned unsat under assumptions.
+		CoreRef  unsatCore()        const;
 		//! Waits until a result is ready and returns it if it is a model.
 		/*!
 		 * \note If the corresponding solve operation was not started with
@@ -227,6 +230,7 @@ public:
 		bool                 complete()     const { return result.exhausted(); }
 		bool                 optimum()      const { return costs() && (complete() || model()->opt); }
 		const Model*         model()        const;
+		const LitVec*        unsatCore()    const;
 		const char*          consequences() const; /**< Cautious/brave reasoning active? */
 		bool                 optimize()     const; /**< Optimization active? */
 		const SumVec*        costs()        const; /**< Models have associated costs? */
@@ -321,6 +325,11 @@ public:
 	bool               enableProgramUpdates();
 	//! Enables support for (asynchronous) solve interrupts.
 	void               enableSolveInterrupts();
+	//! Disables program disposal in non-incremental mode after problem has been prepared for solving.
+	/*!
+	 * \pre program() != 0 and not prepared().
+	 */
+	void               keepProgram();
 	//! Tries to detect the problem type from the given input stream.
 	static ProblemType detectProblemType(std::istream& str);
 	//! Tries to read the next program part from the stream passed to start().

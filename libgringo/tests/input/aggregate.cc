@@ -86,7 +86,7 @@ std::string simplify(UBodyAggr &&x) {
     Projections project;
     SimplifyState state;
     x->simplify(project, state, false, log);
-    return to_string(std::make_pair(std::move(x), std::move(state.dots)));
+    return to_string(std::make_pair(std::move(x), state.dots()));
 }
 
 std::string simplify(UHeadAggr &&x) {
@@ -94,11 +94,11 @@ std::string simplify(UHeadAggr &&x) {
     Projections project;
     SimplifyState state;
     x->simplify(project, state, log);
-    return to_string(std::make_pair(std::move(x), std::move(state.dots)));
+    return to_string(std::make_pair(std::move(x), state.dots()));
 }
 
 std::string rewrite(UBodyAggr &&x) {
-    Literal::AssignVec assign;
+    Literal::RelationVec assign;
     Term::ArithmeticsMap arith;
     arith.emplace_back(gringo_make_unique<Term::LevelMap>());
     AuxGen gen;
@@ -122,13 +122,13 @@ std::string rewrite(UHeadAggr &&x) {
 
 UHeadAggrVec unpool(UHeadAggr &&x) {
     UHeadAggrVec y;
-    x->unpool(y, true);
+    x->unpool(y);
     return y;
 }
 
 UBodyAggrVec unpool(UBodyAggr &&x) {
     UBodyAggrVec y;
-    x->unpool(y, true);
+    x->unpool(y);
     return y;
 }
 
@@ -382,17 +382,17 @@ TEST_CASE("input-aggregate", "[input]") {
 
     SECTION("simplify") {
         // body tuple aggregate
-        REQUIRE("(#Range0>#sum{#Range1:p(#Range2),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(bdaggr(NAF::POS, AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), bdelemvec(termvec(dterm(3,4)), litvec(dlit(5,6))))));
+        REQUIRE("((#Range0+0)>#sum{(#Range1+0):p((#Range2+0)),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(bdaggr(NAF::POS, AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), bdelemvec(termvec(dterm(3,4)), litvec(dlit(5,6))))));
         // body lit aggregate
-        REQUIRE("(#Range0>#sum{p(#Range1):p(#Range2),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(bdaggr(NAF::POS, AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), condlitvec(dlit(3,4), litvec(dlit(5,6))))));
+        REQUIRE("((#Range0+0)>#sum{p((#Range1+0)):p((#Range2+0)),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(bdaggr(NAF::POS, AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), condlitvec(dlit(3,4), litvec(dlit(5,6))))));
         // conjunction
-        REQUIRE("(p(#Range0)&#range(#Range0,1,2):p(#Range1),#range(#Range1,3,4),[])" == simplify(bdaggr(dlit(1,2), litvec(dlit(3,4)))));
+        REQUIRE("(p((#Range0+0))&#range(#Range0,1,2):p((#Range1+0)),#range(#Range1,3,4),[])" == simplify(bdaggr(dlit(1,2), litvec(dlit(3,4)))));
         // head tuple aggregate
-        REQUIRE("(#Range0>#sum{#Range1:p(#Range2):p(#Range3),#range(#Range1,3,4),#range(#Range2,5,6),#range(#Range3,7,8)},[(#Range0,1,2)])" == simplify(hdaggr(AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), hdelemvec(termvec(dterm(3,4)), dlit(5,6), litvec(dlit(7,8))))));
+        REQUIRE("((#Range0+0)>#sum{(#Range1+0):p((#Range2+0)):p((#Range3+0)),#range(#Range1,3,4),#range(#Range2,5,6),#range(#Range3,7,8)},[(#Range0,1,2)])" == simplify(hdaggr(AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), hdelemvec(termvec(dterm(3,4)), dlit(5,6), litvec(dlit(7,8))))));
         // head lit aggregate
-        REQUIRE("(#Range0>#sum{p(#Range1):p(#Range2),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(hdaggr(AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), condlitvec(dlit(3,4), litvec(dlit(5,6))))));
+        REQUIRE("((#Range0+0)>#sum{p((#Range1+0)):p((#Range2+0)),#range(#Range1,3,4),#range(#Range2,5,6)},[(#Range0,1,2)])" == simplify(hdaggr(AggregateFunction::SUM, boundvec(Relation::LT, dterm(1,2)), condlitvec(dlit(3,4), litvec(dlit(5,6))))));
         // disjunction
-        REQUIRE("(p(#Range0):#range(#Range0,1,2):p(#Range1),#range(#Range1,3,4),[])" == simplify(hdaggr(condlitvec(dlit(1,2), litvec(dlit(3,4))))));
+        REQUIRE("(p((#Range0+0)):#range(#Range0,1,2):p((#Range1+0)),#range(#Range1,3,4),[])" == simplify(hdaggr(condlitvec(dlit(1,2), litvec(dlit(3,4))))));
     }
 
     SECTION("rewriteArithmetics") {
@@ -409,7 +409,7 @@ TEST_CASE("input-aggregate", "[input]") {
         // head lit aggregate
         REQUIRE("(#Arith0>#sum{p((C+D)):p(#Arith1),#Arith1=(E+F)},[{(A+B):#Arith0}])" == rewrite(hdaggr(AggregateFunction::SUM, boundvec(Relation::LT, aterm("A","B")), condlitvec(alit("C","D"), litvec(alit("E","F"))))));
         // disjunction
-        REQUIRE("(p((C+D))::p(#Arith0),#Arith0=(E+F),#Arith1=(E+F),#Arith1=#Arith0,[{}])" == rewrite(hdaggr(condlitvec(alit("C","D"), litvec(alit("E","F"))))));
+        REQUIRE("(p((C+D))::p(#Arith0),#Arith0=(E+F),[{}])" == rewrite(hdaggr(condlitvec(alit("C","D"), litvec(alit("E","F"))))));
     }
 
 }

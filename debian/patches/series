@@ -1,4 +1,8 @@
 gringo-manpages.patch
 gringo-python3-utf8.patch
 link-libatomic-check.patch
-bump-version-5.4.1.patch
+use-system-catch-for-glibc-2.34-compat.patch
+testsuite-python-open-rU.patch
+gcc13.diff
+reduce-thread-count.patch
+skip-test_clingo_app.patch

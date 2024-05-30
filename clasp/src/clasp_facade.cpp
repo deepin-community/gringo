@@ -223,6 +223,7 @@ public:
 	bool setModel(const Solver& s, const Model& m) {
 		result_.flags |= SolveResult::SAT;
 		bool ok = !handler_ || handler_->onModel(s, m);
+		ok      = s.sharedContext()->report(s, m) && ok;
 		if ((mode_ & SolveMode_t::Yield) != 0) { doNotify(event_model); }
 		return ok && !signal();
 	}
@@ -234,6 +235,11 @@ public:
 	const Model* model() {
 		return state_ == state_model || (result().sat() && state_ == state_model)
 			? &algo_->model()
+			: 0;
+	}
+	const LitVec* unsatCore() {
+		return result().unsat()
+			? algo_->unsatCore()
 			: 0;
 	}
 	bool next() {
@@ -304,6 +310,8 @@ void ClaspFacade::SolveStrategy::start(EventHandler* h, const LitVec& a) {
 	}
 	handler_ = h;
 	std::memset(&result_, 0, sizeof(SolveResult));
+	// We forward models to the SharedContext ourselves.
+	algo_->setReportModels(false);
 	doStart();
 	assert(running() || ready());
 }
@@ -425,35 +433,40 @@ ClaspFacade::SolveStrategy* ClaspFacade::SolveStrategy::create(SolveMode_t m, Cl
 // ClaspFacade::SolveData
 /////////////////////////////////////////////////////////////////////////////////////////
 struct ClaspFacade::SolveData {
-	struct CostArray {
-		CostArray() : data(0) {}
-		~CostArray() { while (!refs.empty()) { delete refs.back(); refs.pop_back(); } }
+	struct BoundArray {
+		enum Type { Lower, Costs };
+		BoundArray(SolveData* d, Type t) : data(d), type(t) {}
+		~BoundArray() { while (!refs.empty()) { delete refs.back(); refs.pop_back(); } }
 		struct LevelRef {
-			LevelRef(const CostArray* a, uint32 l) : arr(a), at(l) {}
-			static double value(const LevelRef* ref) {
-				POTASSCO_REQUIRE(ref->at < ref->arr->size(), "expired key");
-				return static_cast<double>(ref->arr->data->costs->at(ref->at));
-			}
-			const CostArray* arr;
-			uint32           at;
+			LevelRef(const BoundArray* a, uint32 l) : arr(a), at(l) {}
+			static double value(const LevelRef* ref) { return ref->arr->_at(ref->at); }
+			const BoundArray* arr;
+			uint32            at;
 		};
-		typedef PodVector<LevelRef*>::type ElemVec;
-		uint32 size() const {
-			return data && data->costs ? sizeVec(*data->costs) : 0;
-		}
+		typedef typename PodVector<LevelRef*>::type ElemVec;
+		uint32 size() const { return data->numBounds(); }
 		StatisticObject at(uint32 i) const {
 			POTASSCO_REQUIRE(i < size(), "invalid key");
 			while (i >= refs.size()) { refs.push_back(new LevelRef(this, sizeVec(refs))); }
 			return StatisticObject::value<LevelRef, &LevelRef::value>(refs[i]);
 		}
-		const Model*    data;
-		mutable ElemVec refs;
+		double _at(uint32_t idx) const {
+			POTASSCO_REQUIRE(idx < size(), "expired key");
+			const wsum_t bound = data->_bound(type, idx);
+			return bound != SharedMinimizeData::maxBound()
+				? static_cast<double>(bound)
+				: std::numeric_limits<double>::infinity();
+		}
+		const SolveData* data;
+		mutable ElemVec  refs;
+		Type             type;
 	};
 	typedef SingleOwnerPtr<SolveAlgorithm> AlgoPtr;
 	typedef SingleOwnerPtr<Enumerator>     EnumPtr;
 	typedef Clasp::Atomic_t<int>::type     SafeIntType;
 	typedef const SharedMinimizeData*      MinPtr;
-	SolveData() : en(0), algo(0), active(0), prepared(false), solved(false), interruptible(false) { qSig = 0; }
+
+	SolveData() : en(0), algo(0), active(0), costs(this, BoundArray::Costs), lower(this, BoundArray::Lower), keepPrg(false), prepared(false), solved(false), interruptible(false) { qSig = 0; }
 	~SolveData() { reset(); }
 	void init(SolveAlgorithm* algo, Enumerator* en);
 	void reset();
@@ -468,15 +481,29 @@ struct ClaspFacade::SolveData {
 	}
 	bool         solving()   const { return active && active->running(); }
 	const Model* lastModel() const { return en.get() ? &en->lastModel() : 0; }
+	const LitVec*unsatCore() const { return active ? active->unsatCore() : 0; }
 	MinPtr       minimizer() const { return en.get() ? en->minimizer() : 0; }
 	Enumerator*  enumerator()const { return en.get(); }
 	int          modelType() const { return en.get() ? en->modelType() : 0; }
 	int          signal()    const { return solving() ? active->signal() : static_cast<int>(qSig); }
+	uint32       numBounds() const { return minimizer() ? minimizer()->numRules() : 0; }
+
+	wsum_t _bound(BoundArray::Type type, uint32 idx) const {
+		const Model* m = lastModel();
+		if (m && m->costs && (m->opt || type == BoundArray::Costs)) {
+			return m->costs->at(idx);
+		}
+		const wsum_t b = type == BoundArray::Costs ? minimizer()->sum(idx) : minimizer()->lower(idx);
+		return b + (b != SharedMinimizeData::maxBound() ? minimizer()->adjust(idx) : 0);
+	}
+
 	EnumPtr        en;
 	AlgoPtr        algo;
 	SolveStrategy* active;
-	CostArray      costs;
+	BoundArray     costs;
+	BoundArray     lower;
 	SafeIntType    qSig;
+	bool           keepPrg;
 	bool           prepared;
 	bool           solved;
 	bool           interruptible;
@@ -484,7 +511,6 @@ struct ClaspFacade::SolveData {
 void ClaspFacade::SolveData::init(SolveAlgorithm* a, Enumerator* e) {
 	en = e;
 	algo = a;
-	costs.data = 0;
 	algo->setEnumerator(*en);
 	if (interruptible) {
 		this->algo->enableInterrupts();
@@ -508,24 +534,24 @@ void ClaspFacade::SolveData::prepareEnum(SharedContext& ctx, int64 numM, EnumOpt
 			numM = lim;
 		}
 		algo->setEnumLimit(numM ? static_cast<uint64>(numM) : UINT64_MAX);
-		costs.data = lastModel();
 		prepared = true;
 	}
 }
 ClaspFacade::SolveHandle::SolveHandle(SolveStrategy* s) : strat_(s->share()) {}
 ClaspFacade::SolveHandle::~SolveHandle() { strat_->release(); }
 ClaspFacade::SolveHandle::SolveHandle(const SolveHandle& o) : strat_(o.strat_->share()) {}
-int  ClaspFacade::SolveHandle::interrupted()     const { return strat_->signal(); }
-bool ClaspFacade::SolveHandle::error()           const { return ready() && strat_->error(); }
-bool ClaspFacade::SolveHandle::ready()           const { return strat_->ready(); }
-bool ClaspFacade::SolveHandle::running()         const { return strat_->running(); }
-void ClaspFacade::SolveHandle::cancel()          const { strat_->interrupt(SolveStrategy::SIGCANCEL); }
-void ClaspFacade::SolveHandle::wait()            const { strat_->wait(-1.0); }
-bool ClaspFacade::SolveHandle::waitFor(double s) const { return strat_->wait(s); }
-void ClaspFacade::SolveHandle::resume()          const { strat_->resume(); }
-SolveResult ClaspFacade::SolveHandle::get()      const { return strat_->result(); }
-const Model* ClaspFacade::SolveHandle::model()   const { return strat_->model(); }
-bool ClaspFacade::SolveHandle::next()            const { return strat_->next(); }
+int  ClaspFacade::SolveHandle::interrupted()        const { return strat_->signal(); }
+bool ClaspFacade::SolveHandle::error()              const { return ready() && strat_->error(); }
+bool ClaspFacade::SolveHandle::ready()              const { return strat_->ready(); }
+bool ClaspFacade::SolveHandle::running()            const { return strat_->running(); }
+void ClaspFacade::SolveHandle::cancel()             const { strat_->interrupt(SolveStrategy::SIGCANCEL); }
+void ClaspFacade::SolveHandle::wait()               const { strat_->wait(-1.0); }
+bool ClaspFacade::SolveHandle::waitFor(double s)    const { return strat_->wait(s); }
+void ClaspFacade::SolveHandle::resume()             const { strat_->resume(); }
+SolveResult ClaspFacade::SolveHandle::get()         const { return strat_->result(); }
+const Model*  ClaspFacade::SolveHandle::model()     const { return strat_->model(); }
+const LitVec* ClaspFacade::SolveHandle::unsatCore() const { return strat_->unsatCore(); }
+bool ClaspFacade::SolveHandle::next()               const { return strat_->next(); }
 /////////////////////////////////////////////////////////////////////////////////////////
 // ClaspFacade::Statistics
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -702,6 +728,7 @@ ClaspFacade::Statistics::ClingoView::ClingoView(const ClaspFacade& f) {
 	summary_.add("signal"     , StatisticObject::value<SolveResult, _getSignal>(&f.step_.result));
 	summary_.add("exhausted"  , StatisticObject::value<SolveResult, _getExhausted>(&f.step_.result));
 	summary_.add("costs"      , StatisticObject::array(&f.solve_->costs));
+	summary_.add("lower"      , StatisticObject::array(&f.solve_->lower));
 	summary_.add("concurrency", StatisticObject::value<SharedContext, _getConcurrency>(&f.ctx));
 	summary_.add("winner"     , StatisticObject::value<SharedContext, _getWinner>(&f.ctx));
 	summary_.step.bind(f.step_);
@@ -846,6 +873,7 @@ bool ClaspFacade::enableProgramUpdates() {
 	POTASSCO_REQUIRE(program(), "Program was already released!");
 	POTASSCO_REQUIRE(!solving() && !program()->frozen());
 	if (!accu_.get()) {
+		keepProgram();
 		builder_->updateProgram();
 		ctx.setSolveMode(SharedContext::solve_multi);
 		enableSolveInterrupts();
@@ -862,6 +890,12 @@ void ClaspFacade::enableSolveInterrupts() {
 		solve_->interruptible = true;
 		solve_->algo->enableInterrupts();
 	}
+}
+
+void Clasp::ClaspFacade::keepProgram() {
+	POTASSCO_REQUIRE(program(), "Program was already released!");
+	POTASSCO_ASSERT(solve_.get(), "Active program required!");
+	solve_->keepPrg = true;
 }
 
 void ClaspFacade::startStep(uint32 n) {
@@ -941,6 +975,7 @@ bool ClaspFacade::read() {
 
 void ClaspFacade::prepare(EnumMode enumMode) {
 	POTASSCO_REQUIRE(solve_.get() && !solving());
+	POTASSCO_REQUIRE(!solved() || ctx.solveMode() == SharedContext::solve_multi);
 	EnumOptions& en = config_->solve;
 	if (solved()) {
 		doUpdate(0, false, SIG_DFL);
@@ -966,8 +1001,8 @@ void ClaspFacade::prepare(EnumMode enumMode) {
 	}
 	POTASSCO_REQUIRE(!ctx.ok() || !ctx.frozen());
 	solve_->prepareEnum(ctx, en.numModels, en.optMode, enumMode, en.proMode);
-	if      (!accu_.get()) { builder_ = 0; }
-	else if (isAsp())      { static_cast<Asp::LogicProgram*>(builder_.get())->dispose(false); }
+	if      (!solve_->keepPrg) { builder_ = 0; }
+	else if (isAsp())          { static_cast<Asp::LogicProgram*>(builder_.get())->dispose(false); }
 	if (!builder_.get() && !ctx.heuristic.empty()) {
 		bool keepDom = false;
 		for (uint32 i = 0; i != config_->solve.numSolver() && !keepDom; ++i) {
@@ -989,7 +1024,8 @@ ClaspFacade::Result ClaspFacade::solve(const LitVec& a, EventHandler* handler) {
 }
 
 ProgramBuilder& ClaspFacade::update(bool updateConfig, void (*sigAct)(int)) {
-	POTASSCO_REQUIRE(config_ && program() && !solving());
+	POTASSCO_REQUIRE(config_ && program() && !solving(), "Program updates not supported!");
+	POTASSCO_REQUIRE(!program()->frozen() || incremental(), "Program updates not supported!");
 	doUpdate(program(), updateConfig, sigAct);
 	return *program();
 }
@@ -1040,6 +1076,7 @@ bool ClaspFacade::Summary::optimize()      const {
 	}
 	return false;
 }
+const LitVec* ClaspFacade::Summary::unsatCore() const { return facade->solve_.get() ? facade->solve_->unsatCore() : 0; }
 const Asp::LpStats* ClaspFacade::Summary::lpStep() const {
 	return facade->isAsp() ? &static_cast<const Asp::LogicProgram*>(facade->program())->stats : 0;
 }

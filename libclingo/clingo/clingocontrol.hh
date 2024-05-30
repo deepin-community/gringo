@@ -25,9 +25,10 @@
 #ifndef CLINGO_CLINGOCONTROL_HH
 #define CLINGO_CLINGOCONTROL_HH
 
+#include "clingo.h"
 #include <clingo/control.hh>
 #include <clingo/scripts.hh>
-#include <clingo/ast.hh>
+#include <clingo/astv2.hh>
 #include <gringo/output/output.hh>
 #include <gringo/input/program.hh>
 #include <gringo/input/programbuilder.hh>
@@ -62,7 +63,6 @@ public:
     void project(const Potassco::AtomSpan& atoms) override;
     void output(Symbol sym, Potassco::Atom_t atom) override;
     void output(Symbol sym, Potassco::LitSpan const& condition) override;
-    void output(Symbol sym, int value, Potassco::LitSpan const& condition) override;
     void external(Potassco::Atom_t a, Potassco::Value_t v) override;
     void assume(const Potassco::LitSpan& lits) override;
     void heuristic(Potassco::Atom_t a, Potassco::Heuristic_t t, int bias, unsigned prio, const Potassco::LitSpan& condition) override;
@@ -91,11 +91,11 @@ struct ClingoOptions {
     bool                          wNoOperationUndefined = false;
     bool                          wNoAtomUndef          = false;
     bool                          wNoFileIncluded       = false;
-    bool                          wNoVariableUnbounded  = false;
     bool                          wNoGlobalVariable     = false;
     bool                          wNoOther              = false;
     bool                          rewriteMinimize       = false;
     bool                          keepFacts             = false;
+    bool                          singleShot            = false;
     Foobar                        foobar;
 };
 
@@ -103,7 +103,6 @@ inline void enableAll(ClingoOptions& out, bool enable) {
     out.wNoAtomUndef          = !enable;
     out.wNoFileIncluded       = !enable;
     out.wNoOperationUndefined = !enable;
-    out.wNoVariableUnbounded  = !enable;
     out.wNoGlobalVariable     = !enable;
     out.wNoOther              = !enable;
 }
@@ -117,8 +116,6 @@ inline bool parseWarning(const std::string& str, ClingoOptions& out) {
     if (str ==    "file-included")         { out.wNoFileIncluded       = false; return true; }
     if (str == "no-operation-undefined")   { out.wNoOperationUndefined = true;  return true; }
     if (str ==    "operation-undefined")   { out.wNoOperationUndefined = false; return true; }
-    if (str == "no-variable-unbounded")    { out.wNoVariableUnbounded  = true;  return true; }
-    if (str ==    "variable-unbounded")    { out.wNoVariableUnbounded  = false; return true; }
     if (str == "no-global-variable")       { out.wNoGlobalVariable     = true;  return true; }
     if (str ==    "global-variable")       { out.wNoGlobalVariable     = false; return true; }
     if (str == "no-other")                 { out.wNoOther              = true;  return true; }
@@ -153,31 +150,6 @@ inline bool parseFoobar(const std::string& str, ClingoOptions::Foobar& foobar) {
 
 // {{{1 declaration of ClingoControl
 
-class ClingoPropagateInit : public PropagateInit {
-public:
-    using Lit_t = Potassco::Lit_t;
-    ClingoPropagateInit(Control &c, Clasp::ClingoPropagatorInit &p);
-    Output::DomainData const &theory() const override { return c_.theory(); }
-    SymbolicAtoms const &getDomain() const override { return c_.getDomain(); }
-    Lit_t mapLit(Lit_t lit) const override;
-    int threads() const override;
-    void addWatch(Lit_t lit) override { p_.addWatch(Clasp::decodeLit(lit)); }
-    void addWatch(uint32_t solverId, Lit_t lit) override { p_.addWatch(solverId, Clasp::decodeLit(lit)); }
-    void enableHistory(bool b) override { p_.enableHistory(b); };
-    bool addClause(Potassco::LitSpan lits) override;
-    void setCheckMode(clingo_propagator_check_mode_t checkMode) override {
-        p_.enableClingoPropagatorCheck(static_cast<Clasp::ClingoPropagatorCheck_t::Type>(checkMode));
-    }
-    Potassco::AbstractAssignment const &assignment() const override;
-    clingo_propagator_check_mode_t getCheckMode() const override {
-        return p_.checkMode();
-    }
-private:
-    Control &c_;
-    Clasp::ClingoPropagatorInit &p_;
-    Clasp::ClingoAssignment a_;
-};
-
 class ClingoPropagatorLock : public Clasp::ClingoPropagatorLock {
 public:
     ClingoPropagatorLock() : seq_(0) {}
@@ -202,7 +174,7 @@ class IClingoApp {
 public:
     virtual unsigned message_limit() const { return 20; }
     virtual char const *program_name() const { return "clingo"; }
-    virtual char const *version() const { return CLINGO_VERSION_STRING; }
+    virtual char const *version() const { return clingo_version_string(); }
     virtual bool has_main() const { return false; }
     virtual void main(ClingoControl &ctl, std::vector<std::string> const &files) {
         static_cast<void>(ctl);
@@ -230,9 +202,11 @@ class TheoryOutput : public Clasp::OutputTable::Theory {
 public:
     char const * first(const Clasp::Model&) override;
     char const * next() override;
-
     void add(Potassco::Span<Symbol> symbols) {
         symbols_.insert(symbols_.end(), begin(symbols), end(symbols));
+    }
+    void copy_symbols(std::vector<Symbol> &symbols) {
+        symbols.insert(symbols.end(), symbols_.begin(), symbols_.end());
     }
     void reset() {
         symbols_.clear();
@@ -277,6 +251,7 @@ private:
 
 class ClingoSolveFuture;
 class ClingoControl : public clingo_control, private ConfigProxy, private SymbolicAtoms, private Potassco::AbstractHeuristic {
+    class ControlBackend;
 public:
     using StringVec        = std::vector<std::string>;
     using ExternalVec      = std::vector<std::pair<Symbol, Potassco::Value_t>>;
@@ -292,6 +267,7 @@ public:
     void parse(const StringVec& files, const ClingoOptions& opts, Clasp::Asp::LogicProgram* out, bool addStdIn = true);
     void main(IClingoApp &app, StringVec const &files, const ClingoOptions& opts, Clasp::Asp::LogicProgram* out);
     bool onModel(Clasp::Model const &m);
+    bool onUnsat(Potassco::Span<int64_t> optimization);
     void onFinish(Clasp::ClaspFacade::Result ret);
     bool update();
 
@@ -347,25 +323,38 @@ public:
     Potassco::AbstractStatistics const *statistics() const override;
     ConfigProxy &getConf() override;
     void useEnumAssumption(bool enable) override;
-    bool useEnumAssumption() override;
-    void cleanupDomains() override;
+    bool useEnumAssumption() const override;
+    void cleanup() override;
+    void enableCleanup(bool enable) override;
+    bool enableCleanup() const override;
     USolveFuture solve(Assumptions ass, clingo_solve_mode_bitset_t mode, USolveEventHandler cb) override;
     Output::DomainData const &theory() const override { return out_->data; }
     void registerPropagator(UProp p, bool sequential) override;
     void interrupt() override;
     void *claspFacade() override;
     bool beginAddBackend() override;
+    Gringo::Output::TheoryData &theoryData() override {
+        return out_->data.theory();
+    }
     Id_t addAtom(Symbol sym) override;
+    void addFact(Potassco::Atom_t uid) override;
     Backend *getBackend() override {
         if (!backend_) { throw std::runtime_error("backend not available"); }
         return backend_;
+    };
+    Backend &getASPIFBackend() override {
+        return *aspif_bck_;
     };
     void endAddBackend() override;
     Potassco::Atom_t addProgramAtom() override;
     Logger &logger() override { return logger_; }
     void beginAdd() override { parse(); }
-    void add(clingo_ast_statement_t const &stm) override { Input::parseStatement(*pb_, logger_, stm); }
-    void endAdd() override { defs_.init(logger_); parsed = true; }
+    void add(clingo_ast_t const &ast) override { Input::parse(*pb_, logger_, ast.ast); }
+    void endAdd() override {
+        parser_->disable_aspif();
+        defs_.init(logger_);
+        parsed_ = true;
+    }
     void registerObserver(UBackend obs, bool replace) override {
         if (replace) { clingoMode_ = false; }
         out_->registerObserver(std::move(obs), replace);
@@ -378,6 +367,7 @@ public:
     Scripts                                                   &scripts_;
     Input::Program                                             prg_;
     Defines                                                    defs_;
+    std::unique_ptr<Backend>                                   aspif_bck_;
     std::unique_ptr<Input::NongroundProgramBuilder>            pb_;
     std::unique_ptr<Input::NonGroundParser>                    parser_;
     USolveEventHandler                                         eventHandler_;
@@ -389,21 +379,25 @@ public:
     std::vector<UProp>                                         props_;
     std::vector<Potassco::AbstractHeuristic*>                  heus_;
     std::vector<std::unique_ptr<Clasp::ClingoPropagatorInit>>  propagators_;
+    std::vector<Symbol>                                        added_atoms_;
+    std::unordered_set<Potassco::Atom_t>                       added_facts_;
     ClingoPropagatorLock                                       propLock_;
     Logger                                                     logger_;
     TheoryOutput                                               theory_;
     Backend                                                   *backend_               = nullptr;
+    std::unique_ptr<Ground::Program>                           backend_prg_;
     UserStatistics                                             step_stats_;
     UserStatistics                                             accu_stats_;
     bool                                                       enableEnumAssupmption_ = true;
+    bool                                                       enableCleanup_         = true;
     bool                                                       clingoMode_;
     bool                                                       verbose_               = false;
-    bool                                                       parsed                 = false;
-    bool                                                       grounded               = false;
-    bool                                                       incremental_           = true;
+    bool                                                       parsed_                = false;
     bool                                                       configUpdate_          = false;
+    bool                                                       grounded_              = false;
     bool                                                       initialized_           = false;
     bool                                                       incmode_               = false;
+    bool                                                       canClean_              = false;
 
 };
 
@@ -420,6 +414,9 @@ public:
     }
     SymSpan atoms(unsigned atomset) const override {
         atms_ = out().atoms(atomset, [this](unsigned uid) { return model_->isTrue(lp().getLiteral(uid)); });
+        if (atomset & clingo_show_type_theory) {
+            ctl_.theory_.copy_symbols(atms_);
+        }
         return Potassco::toSpan(atms_);
     }
     Int64Vec optimization() const override {
@@ -435,7 +432,14 @@ public:
             else { return; }
         }
         claspLits.push_back(~ctx().stepLiteral());
-        model_->ctx->commitClause(claspLits);
+        std::sort(claspLits.begin(), claspLits.end());
+        claspLits.erase(std::unique(claspLits.begin(), claspLits.end()), claspLits.end());
+        auto it = std::adjacent_find(claspLits.begin(), claspLits.end(), [](Clasp::Literal const &a, Clasp::Literal const &b) {
+            return a.var() == b.var();
+        });
+        if (it == claspLits.end()) {
+            model_->ctx->commitClause(claspLits);
+        }
     }
     Gringo::SymbolicAtoms const &getDomain() const override {
         return ctl_.getDomain();
@@ -471,10 +475,12 @@ public:
 
     SolveResult  get()  override;
     Model const *model() override;
+    Potassco::LitSpan unsatCore() override;
     bool wait(double timeout) override;
     void resume() override;
     void cancel() override;
 private:
+    Potassco::LitVec                core_;
     ClingoModel                     model_;
     Clasp::ClaspFacade::SolveHandle handle_;
 };
@@ -492,6 +498,7 @@ protected:
     // Event handler
     void onEvent(const Clasp::Event& ev) override;
     bool onModel(const Clasp::Solver& s, const Clasp::Model& m) override;
+    bool onUnsat(const Clasp::Solver&, const Clasp::Model&) override;
 private:
     ClingoLib(const ClingoLib&);
     ClingoLib& operator=(const ClingoLib&);

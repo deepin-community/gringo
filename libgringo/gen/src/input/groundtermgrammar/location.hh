@@ -1,8 +1,8 @@
-// A Bison parser, made by GNU Bison 3.0.4.
+// A Bison parser, made by GNU Bison 3.3.2.
 
 // Locations for Bison parsers in C++
 
-// Copyright (C) 2002-2015 Free Software Foundation, Inc.
+// Copyright (C) 2002-2015, 2018-2019 Free Software Foundation, Inc.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,19 +31,152 @@
 // version 2.2 of Bison.
 
 /**
- ** \file /mnt/scratch/kaminski/build/clingo/debug/libgringo/src/input/groundtermgrammar/location.hh
+ ** \file /home/kaminski/Documents/git/potassco/clingo/build/debug/libgringo/src/input/groundtermgrammar/location.hh
  ** Define the Gringo::Input::GroundTermGrammar::location class.
  */
 
-#ifndef YY_GRINGOGROUNDTERMGRAMMAR_MNT_SCRATCH_KAMINSKI_BUILD_CLINGO_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED
-# define YY_GRINGOGROUNDTERMGRAMMAR_MNT_SCRATCH_KAMINSKI_BUILD_CLINGO_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED
+#ifndef YY_GRINGOGROUNDTERMGRAMMAR_HOME_KAMINSKI_DOCUMENTS_GIT_POTASSCO_CLINGO_BUILD_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED
+# define YY_GRINGOGROUNDTERMGRAMMAR_HOME_KAMINSKI_DOCUMENTS_GIT_POTASSCO_CLINGO_BUILD_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED
 
-# include "position.hh"
+# include <algorithm> // std::max
+# include <iostream>
+# include <string>
 
-#line 26 "/home/kaminski/git/clingo/libgringo/src/input/groundtermgrammar.yy" // location.cc:296
+# ifndef YY_NULLPTR
+#  if defined __cplusplus
+#   if 201103L <= __cplusplus
+#    define YY_NULLPTR nullptr
+#   else
+#    define YY_NULLPTR 0
+#   endif
+#  else
+#   define YY_NULLPTR ((void*)0)
+#  endif
+# endif
+
+#line 26 "/home/kaminski/Documents/git/potassco/clingo/libgringo/src/input/groundtermgrammar.yy" // location.cc:339
 namespace Gringo { namespace Input { namespace GroundTermGrammar {
-#line 46 "/mnt/scratch/kaminski/build/clingo/debug/libgringo/src/input/groundtermgrammar/location.hh" // location.cc:296
-  /// Abstract a location.
+#line 60 "/home/kaminski/Documents/git/potassco/clingo/build/debug/libgringo/src/input/groundtermgrammar/location.hh" // location.cc:339
+  /// A point in a source file.
+  class position
+  {
+  public:
+    /// Construct a position.
+    explicit position (std::string* f = YY_NULLPTR,
+                       unsigned l = 1u,
+                       unsigned c = 1u)
+      : filename (f)
+      , line (l)
+      , column (c)
+    {}
+
+
+    /// Initialization.
+    void initialize (std::string* fn = YY_NULLPTR,
+                     unsigned l = 1u,
+                     unsigned c = 1u)
+    {
+      filename = fn;
+      line = l;
+      column = c;
+    }
+
+    /** \name Line and Column related manipulators
+     ** \{ */
+    /// (line related) Advance to the COUNT next lines.
+    void lines (int count = 1)
+    {
+      if (count)
+        {
+          column = 1u;
+          line = add_ (line, count, 1);
+        }
+    }
+
+    /// (column related) Advance to the COUNT next columns.
+    void columns (int count = 1)
+    {
+      column = add_ (column, count, 1);
+    }
+    /** \} */
+
+    /// File name to which this position refers.
+    std::string* filename;
+    /// Current line number.
+    unsigned line;
+    /// Current column number.
+    unsigned column;
+
+  private:
+    /// Compute max (min, lhs+rhs).
+    static unsigned add_ (unsigned lhs, int rhs, int min)
+    {
+      return static_cast<unsigned> (std::max (min,
+                                              static_cast<int> (lhs) + rhs));
+    }
+  };
+
+  /// Add \a width columns, in place.
+  inline position&
+  operator+= (position& res, int width)
+  {
+    res.columns (width);
+    return res;
+  }
+
+  /// Add \a width columns.
+  inline position
+  operator+ (position res, int width)
+  {
+    return res += width;
+  }
+
+  /// Subtract \a width columns, in place.
+  inline position&
+  operator-= (position& res, int width)
+  {
+    return res += -width;
+  }
+
+  /// Subtract \a width columns.
+  inline position
+  operator- (position res, int width)
+  {
+    return res -= width;
+  }
+
+  /// Compare two position objects.
+  inline bool
+  operator== (const position& pos1, const position& pos2)
+  {
+    return (pos1.line == pos2.line
+            && pos1.column == pos2.column
+            && (pos1.filename == pos2.filename
+                || (pos1.filename && pos2.filename
+                    && *pos1.filename == *pos2.filename)));
+  }
+
+  /// Compare two position objects.
+  inline bool
+  operator!= (const position& pos1, const position& pos2)
+  {
+    return !(pos1 == pos2);
+  }
+
+  /** \brief Intercept output stream redirection.
+   ** \param ostr the destination output stream
+   ** \param pos a reference to the position to redirect
+   */
+  template <typename YYChar>
+  std::basic_ostream<YYChar>&
+  operator<< (std::basic_ostream<YYChar>& ostr, const position& pos)
+  {
+    if (pos.filename)
+      ostr << *pos.filename << ':';
+    return ostr << pos.line << '.' << pos.column;
+  }
+
+  /// Two points in a source file.
   class location
   {
   public:
@@ -52,30 +185,27 @@ namespace Gringo { namespace Input { namespace GroundTermGrammar {
     location (const position& b, const position& e)
       : begin (b)
       , end (e)
-    {
-    }
+    {}
 
     /// Construct a 0-width location in \a p.
     explicit location (const position& p = position ())
       : begin (p)
       , end (p)
-    {
-    }
+    {}
 
     /// Construct a 0-width location in \a f, \a l, \a c.
     explicit location (std::string* f,
-                       unsigned int l = 1u,
-                       unsigned int c = 1u)
+                       unsigned l = 1u,
+                       unsigned c = 1u)
       : begin (f, l, c)
       , end (f, l, c)
-    {
-    }
+    {}
 
 
     /// Initialization.
     void initialize (std::string* f = YY_NULLPTR,
-                     unsigned int l = 1u,
-                     unsigned int c = 1u)
+                     unsigned l = 1u,
+                     unsigned c = 1u)
     {
       begin.initialize (f, l, c);
       end = begin;
@@ -170,10 +300,10 @@ namespace Gringo { namespace Input { namespace GroundTermGrammar {
    ** Avoid duplicate information.
    */
   template <typename YYChar>
-  inline std::basic_ostream<YYChar>&
+  std::basic_ostream<YYChar>&
   operator<< (std::basic_ostream<YYChar>& ostr, const location& loc)
   {
-    unsigned int end_col = 0 < loc.end.column ? loc.end.column - 1 : 0;
+    unsigned end_col = 0 < loc.end.column ? loc.end.column - 1 : 0;
     ostr << loc.begin;
     if (loc.end.filename
         && (!loc.begin.filename
@@ -186,7 +316,7 @@ namespace Gringo { namespace Input { namespace GroundTermGrammar {
     return ostr;
   }
 
-#line 26 "/home/kaminski/git/clingo/libgringo/src/input/groundtermgrammar.yy" // location.cc:296
+#line 26 "/home/kaminski/Documents/git/potassco/clingo/libgringo/src/input/groundtermgrammar.yy" // location.cc:339
 } } } // Gringo::Input::GroundTermGrammar
-#line 192 "/mnt/scratch/kaminski/build/clingo/debug/libgringo/src/input/groundtermgrammar/location.hh" // location.cc:296
-#endif // !YY_GRINGOGROUNDTERMGRAMMAR_MNT_SCRATCH_KAMINSKI_BUILD_CLINGO_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED
+#line 322 "/home/kaminski/Documents/git/potassco/clingo/build/debug/libgringo/src/input/groundtermgrammar/location.hh" // location.cc:339
+#endif // !YY_GRINGOGROUNDTERMGRAMMAR_HOME_KAMINSKI_DOCUMENTS_GIT_POTASSCO_CLINGO_BUILD_DEBUG_LIBGRINGO_SRC_INPUT_GROUNDTERMGRAMMAR_LOCATION_HH_INCLUDED

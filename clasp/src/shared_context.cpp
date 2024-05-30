@@ -869,10 +869,10 @@ bool SharedContext::unfreeze() {
 }
 
 bool SharedContext::unfreezeStep() {
+	POTASSCO_ASSERT(!frozen());
 	Var tag = step_.var();
 	for (SolverVec::size_type i = solvers_.size(); i--;) {
 		Solver& s = *solvers_[i];
-		share_.frozen = i > 0;
 		if (!s.validVar(tag)) { continue; }
 		s.endStep(lastTopLevel_, configuration()->solver(s.id()));
 	}
@@ -956,6 +956,7 @@ Solver& SharedContext::startAddConstraints(uint32 constraintGuess) {
 }
 bool SharedContext::addUnary(Literal x) {
 	POTASSCO_REQUIRE(!frozen() || !isShared());
+	master()->acquireProblemVar(x.var());
 	return master()->force(x);
 }
 bool SharedContext::addBinary(Literal x, Literal y) {
@@ -1022,6 +1023,8 @@ bool SharedContext::endInit(bool attachAll) {
 	}
 	btig_.markShared(concurrency() > 1);
 	share_.frozen = 1;
+	if (ok && master()->getPost(PostPropagator::priority_class_general))
+		ok = master()->propagate() && master()->simplify();
 	for (uint32 i = ok && attachAll ? 1 : concurrency(); i != concurrency(); ++i) {
 		if (!hasSolver(i)) { pushSolver(); }
 		if (!attach(i))    { ok = false; break; }
@@ -1039,9 +1042,12 @@ bool SharedContext::attach(Solver& other) {
 	// 1. clone vars & assignment
 	Var lastVar = other.numVars();
 	other.startInit(static_cast<uint32>(master()->constraints_.size()), configuration()->solver(other.id()));
+	if (other.hasConflict()) { return false; }
 	Antecedent null;
 	for (LitVec::size_type i = 0, end = master()->trail().size(); i != end; ++i) {
-		if (!other.force(master()->trail()[i], null)) { return false; }
+		Literal x = master()->trail()[i];
+		if (master()->auxVar(x.var())) { continue;  }
+		if (!other.force(x, null))     { return false; }
 	}
 	for (Var v = satPrepro.get() ? lastVar+1 : varMax, end = master()->numVars(); v <= end; ++v) {
 		if (eliminated(v) && other.value(v) == value_free) {
@@ -1050,9 +1056,7 @@ bool SharedContext::attach(Solver& other) {
 	}
 	if (other.constraints_.empty()) { other.lastSimp_ = master()->lastSimp_; }
 	// 2. clone & attach constraints
-	if (!other.cloneDB(master()->constraints_)) {
-		return false;
-	}
+	if (!other.cloneDB(master()->constraints_)) { return false; }
 	Constraint* c = master()->enumerationConstraint();
 	other.setEnumerationConstraint( c ? c->cloneAttach(other) : 0 );
 	// 3. endInit
@@ -1102,7 +1106,13 @@ void SharedContext::report(Event::Subsystem sys) const {
 		progress_->onEvent(LogEvent(sys, v, LogEvent::Message, 0, m));
 	}
 }
-void SharedContext::simplify(bool shuffle) {
+void SharedContext::simplify(LitVec::size_type trailStart, bool shuffle) {
+	if (!isShared() && trailStart < master()->trail().size()) {
+		for (const LitVec& trail = master()->trail(); trailStart != trail.size(); ++trailStart) {
+			Literal p = trail[trailStart];
+			if (p.id() < btig_.size()) { btig_.removeTrue(*master(), p); }
+		}
+	}
 	Solver::ConstraintDB& db = master()->constraints_;
 	if (concurrency() == 1 || master()->dbIdx_ == 0) {
 		Clasp::simplifyDB(*master(), db, shuffle);
@@ -1138,9 +1148,6 @@ void SharedContext::removeConstraint(uint32 idx, bool detach) {
 	c->destroy(master(), detach);
 }
 
-void SharedContext::simplifyShort(const Solver& s, Literal p) {
-	if (!isShared() && p.id() < btig_.size()) { btig_.removeTrue(s, p); }
-}
 
 uint32 SharedContext::problemComplexity() const {
 	if (isExtended()) {

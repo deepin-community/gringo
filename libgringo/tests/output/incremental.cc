@@ -43,23 +43,28 @@ std::string iground(std::string in, int last = 3) {
     Input::Program prg;
     Defines defs;
     Gringo::Test::TestContext context;
-    Input::NongroundProgramBuilder pb(context, prg, out, defs);
+    NullBackend bck;
+    Input::NongroundProgramBuilder pb(context, prg, out.outPreds, defs);
     bool incmode;
-    Input::NonGroundParser parser(pb, incmode);
+    Input::NonGroundParser parser(pb, bck, incmode);
     parser.pushStream("-", gringo_make_unique<std::stringstream>(in), module.logger);
     Models models;
     parser.parse(module.logger);
     prg.rewrite(defs, module.logger);
     prg.check(module.logger);
     //std::cerr << prg;
-    // TODO: think about passing params to toGround already...
+    auto ground = [&](std::set<Sig> const &sigs, Ground::Parameters const &params) {
+        auto gPrg = prg.toGround(sigs, out.data, module.logger);
+        gPrg.prepare(params, out, module.logger);
+        gPrg.ground(context, out, module.logger);
+    };
     if (!module.logger.hasError()) {
         out.init(true);
         {
             Ground::Parameters params;
             params.add("base", {});
             out.beginStep();
-            prg.toGround({Sig{"base", 0, false}}, out.data, module.logger).ground(params, context, out, module.logger);
+            ground({Sig{"base", 0, false}}, params);
             out.endStep({});
             out.reset(true);
         }
@@ -67,7 +72,7 @@ std::string iground(std::string in, int last = 3) {
             Ground::Parameters params;
             params.add("step", {NUM(i)});
             out.beginStep();
-            prg.toGround({Sig{"step", 1, false}}, out.data, module.logger).ground(params, context, out, module.logger);
+            ground({Sig{"step", 1, false}}, params);
             out.endStep({});
             out.reset(true);
         }
@@ -75,7 +80,7 @@ std::string iground(std::string in, int last = 3) {
             Ground::Parameters params;
             params.add("last", {});
             out.beginStep();
-            prg.toGround({Sig{"last", 0, false}}, out.data, module.logger).ground(params, context, out, module.logger);
+            ground({Sig{"last", 0, false}}, params);
             out.endStep({});
             out.reset(true);
         }
@@ -195,54 +200,6 @@ TEST_CASE("output-incremental", "[output]") {
                 "#program last."
                 "last."));
     }
-    SECTION("csp") {
-        REQUIRE(
-            "asp 1 0 0 incremental\n"
-            "4 6 base=1 0\n"
-            "0\n"
-            "1 0 1 1 0 0\n"
-            "1 1 1 2 0 1 3\n"
-            "1 1 1 3 0 0\n"
-            "1 1 1 4 0 1 5\n"
-            "1 1 1 5 0 1 6\n"
-            "1 1 1 6 0 0\n"
-            "1 1 1 7 0 1 8\n"
-            "1 1 1 8 0 1 9\n"
-            "1 1 1 9 0 1 10\n"
-            "1 1 1 10 0 0\n"
-            "4 4 ib=1 1 2\n"
-            "4 4 ib=2 2 3 -2\n"
-            "4 4 ib=3 1 -3\n"
-            "4 4 lo=1 1 4\n"
-            "4 4 lo=2 2 5 -4\n"
-            "4 4 lo=3 2 6 -5\n"
-            "4 4 lo=4 1 -6\n"
-            "4 4 up=0 1 7\n"
-            "4 4 up=1 2 8 -7\n"
-            "4 4 up=2 2 9 -8\n"
-            "4 4 up=3 2 10 -9\n"
-            "4 4 up=4 1 -10\n"
-            "4 7 step(1) 0\n"
-            "0\n"
-            "1 0 1 11 0 0\n"
-            "1 0 0 0 2 -2 3\n"
-            "1 0 0 0 1 4\n"
-            "1 0 0 0 1 -10\n"
-            "4 7 step(2) 0\n"
-            "0\n"
-            "4 6 last=1 0\n"
-            "0\n" == iground(
-                "#program base."
-                "$base$=1."
-                "#program step(k)."
-                "step(k)."
-                "0 $<= $up $<= 5-k."
-                "k $<= $lo $<= 4."
-                "1 $<= $ib $<= 3."
-                "$ib $= 1; $ib $=3 :- k == 2."
-                "#program last."
-                "$last$=1."));
-    }
 
     SECTION("projectionBug") {
         REQUIRE(
@@ -299,14 +256,6 @@ TEST_CASE("output-incremental", "[output]") {
         REQUIRE(Id_t(2) == m.get(4));
         REQUIRE(Id_t(3) == m.get(5));
         REQUIRE(InvalidId == m.get(6));
-
-        REQUIRE(Id_t(0) == m.bound(0));
-        REQUIRE(Id_t(0) == m.bound(1));
-        REQUIRE(Id_t(1) == m.bound(2));
-        REQUIRE(Id_t(2) == m.bound(3));
-        REQUIRE(Id_t(2) == m.bound(4));
-        REQUIRE(Id_t(3) == m.bound(5));
-        REQUIRE(Id_t(4) == m.bound(6));
     }
 }
 

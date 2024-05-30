@@ -98,8 +98,12 @@ struct Solver::Dirty {
 	}
 	void cleanup(Watches& watches, DecisionLevels& levels) {
 		InSet inCons = { &cons };
+		const uint32 maxId = (uint32)watches.size();
 		for (DirtyList::left_iterator it = dirty.left_begin(), end = dirty.left_end(); it != end; ++it) {
-			WatchList& wl = watches[it->id()];
+			uint32 id = it->id();
+			if (id >= maxId)
+				continue;
+			WatchList& wl = watches[id];
 			if (wl.left_size() && test_and_clear(wl.left_begin()->head)) { wl.shrink_left(std::remove_if(wl.left_begin(), wl.left_end(), inCons)); }
 			if (wl.right_size()&& test_and_clear(wl.right_begin()->con)) { wl.shrink_right(std::remove_if(wl.right_begin(), wl.right_end(), inCons)); }
 		}
@@ -243,7 +247,6 @@ void Solver::startInit(uint32 numConsGuess, const SolverParams& params) {
 		heuristic_.reset(shared_->configuration()->heuristic(id()));
 	}
 	postHead_ = &sent_list; // disable post propagators during setup
-	initPost_ = 0;          // defer calls to PostPropagator::init()
 	heuristic_->startInit(*this);
 }
 
@@ -258,7 +261,6 @@ void Solver::updateVars() {
 }
 
 bool Solver::cloneDB(const ConstraintDB& db) {
-	assert(!hasConflict());
 	while (dbIdx_ < (uint32)db.size() && !hasConflict()) {
 		if (Constraint* c = db[dbIdx_++]->cloneAttach(*this)) {
 			constraints_.push_back(c);
@@ -291,6 +293,7 @@ bool Solver::endInit() {
 }
 
 bool Solver::endStep(uint32 top, const SolverParams& params) {
+	initPost_ = 0; // defer calls to PostPropagator::init()
 	if (!popRootLevel(rootLevel())) { return false; }
 	popAuxVar();
 	Literal x = shared_->stepLiteral();
@@ -378,6 +381,13 @@ Var Solver::pushAuxVar() {
 	heuristic_->updateVar(*this, aux, 1);
 	return aux;
 }
+
+void Solver::acquireProblemVar(Var var) {
+	if (validVar(var) || shared_->frozen() || numProblemVars() <= numVars() || !shared_->ok())
+		return;
+	shared_->startAddConstraints();
+}
+
 void Solver::popAuxVar(uint32 num, ConstraintDB* auxCons) {
 	num = numVars() >= shared_->numVars() ? std::min(numVars() - shared_->numVars(), num) : 0;
 	if (!num) { return; }
@@ -454,10 +464,11 @@ Literal Solver::popVars(uint32 num, bool popLearnt, ConstraintDB* popAux) {
 	return pop;
 }
 
-bool Solver::pushRoot(const LitVec& path) {
-	// make sure we are on the current root level
+bool Solver::pushRoot(const LitVec& path, bool pushStep) {
+	// make sure we are on the current (fully propagated) root level
 	if (!popRootLevel(0) || !simplify() || !propagate()) { return false; }
 	// push path
+	if (pushStep && !pushRoot(shared_->stepLiteral())) { return false; }
 	stats.addPath(path.size());
 	for (LitVec::const_iterator it = path.begin(), end = path.end(); it != end; ++it) {
 		if (!pushRoot(*it)) { return false; }
@@ -580,15 +591,13 @@ uint32 Solver::numWatches(Literal p) const {
 }
 
 bool Solver::hasWatch(Literal p, Constraint* c) const {
-	if (!validWatch(p)) return false;
-	const WatchList& pList = watches_[p.id()];
-	return std::find_if(pList.right_begin(), pList.right_end(), GenericWatch::EqConstraint(c)) != pList.right_end();
+	return getWatch(p, c) != 0;
 }
 
 bool Solver::hasWatch(Literal p, ClauseHead* h) const {
 	if (!validWatch(p)) return false;
 	const WatchList& pList = watches_[p.id()];
-	return std::find_if(pList.left_begin(), pList.left_end(), ClauseWatch::EqHead(h)) != pList.left_end();
+	return !pList.empty() && std::find_if(pList.left_begin(), pList.left_end(), ClauseWatch::EqHead(h)) != pList.left_end();
 }
 
 GenericWatch* Solver::getWatch(Literal p, Constraint* c) const {
@@ -708,13 +717,13 @@ bool Solver::simplifySAT() {
 		return false;
 	}
 	assert(assign_.qEmpty());
-	assign_.front = lastSimp_;
+	uint32 start  = lastSimp_;
+	assign_.front = start;
 	lastSimp_     = (uint32)assign_.trail.size();
 	for (Literal p; !assign_.qEmpty(); ) {
 		p = assign_.qPop();
 		releaseVec(watches_[p.id()]);
 		releaseVec(watches_[(~p).id()]);
-		shared_->simplifyShort(*this, p);
 	}
 	bool shuffle = shufSimp_ != 0;
 	shufSimp_    = 0;
@@ -722,7 +731,7 @@ bool Solver::simplifySAT() {
 		std::random_shuffle(constraints_.begin(), constraints_.end(), rng);
 		std::random_shuffle(learnts_.begin(), learnts_.end(), rng);
 	}
-	if (isMaster()) { shared_->simplify(shuffle); }
+	if (isMaster()) { shared_->simplify(start, shuffle); }
 	else            { simplifyDB(*this, constraints_, shuffle); }
 	simplifyDB(*this, learnts_, shuffle);
 	FOR_EACH_POST(x, postHead_) {
@@ -792,7 +801,7 @@ void Solver::cancelPropagation() {
 }
 
 bool Solver::propagate() {
-	if (unitPropagate() && postPropagate(0)) {
+	if (unitPropagate() && postPropagate(postHead_, 0)) {
 		assert(queueSize() == 0);
 		return true;
 	}
@@ -800,9 +809,24 @@ bool Solver::propagate() {
 	return false;
 }
 
+bool Solver::propagateFrom(PostPropagator* p) {
+	assert((p && *postHead_) && "OP not allowed during init!");
+	assert(queueSize() == 0);
+	for (PostPropagator** r = postHead_; *r;) {
+		if      (*r != p)             { r = &(*r)->next; }
+		else if (postPropagate(r, 0)) { break; }
+		else {
+			cancelPropagation();
+			return false;
+		}
+	}
+	assert(queueSize() == 0);
+	return true;
+}
+
 bool Solver::propagateUntil(PostPropagator* p) {
 	assert((!p || *postHead_) && "OP not allowed during init!");
-	return unitPropagate() && (p == *postHead_ || postPropagate(p));
+	return unitPropagate() && (p == *postHead_ || postPropagate(postHead_, p));
 }
 
 Constraint::PropResult ClauseHead::propagate(Solver& s, Literal p, uint32&) {
@@ -878,8 +902,8 @@ bool Solver::unitPropagate() {
 	return DL || assign_.markUnits();
 }
 
-bool Solver::postPropagate(PostPropagator* stop) {
-	for (PostPropagator** r = postHead_, *t; *r != stop;) {
+bool Solver::postPropagate(PostPropagator** start, PostPropagator* stop) {
+	for (PostPropagator** r = start, *t; *r != stop;) {
 		t = *r;
 		if (!t->propagateFixpoint(*this, stop)) { return false; }
 		assert(queueSize() == 0);
@@ -1127,8 +1151,9 @@ bool Solver::resolveToFlagged(const LitVec& in, const uint8 vf, LitVec& out, uin
 }
 void Solver::resolveToCore(LitVec& out) {
 	POTASSCO_REQUIRE(hasConflict() && !hasStopConflict(), "Function requires valid conflict");
+	// move conflict to cc_
 	cc_.clear();
-	std::swap(cc_, conflict_);
+	cc_.swap(conflict_);
 	if (searchMode() == SolverStrategies::no_learning) {
 		for (uint32 i = 1, end = decisionLevel() + 1; i != end; ++i) { cc_.push_back(decision(i)); }
 	}
@@ -1155,7 +1180,7 @@ void Solver::resolveToCore(LitVec& out) {
 		else if (p == decision(dl))   { out.push_back(p); }
 	}
 	// restore original conflict
-	std::swap(cc_, conflict_);
+	cc_.swap(conflict_);
 }
 
 // computes the First-UIP clause and stores it in cc_, where cc_[0] is the asserting literal (inverted UIP)
