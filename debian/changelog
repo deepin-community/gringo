@@ -1,3 +1,9 @@
+gringo (5.6.2-1deepin1) unstable; urgency=medium
+
+  * No source change upload against python 3.12.
+
+ -- Tianyu Chen <sweetyfish@deepin.org>  Mon, 08 Jul 2024 09:50:36 +0200
+
 gringo (5.6.2-1) unstable; urgency=medium
 
   * Team upload.
